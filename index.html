@@ -102,6 +102,7 @@ main{padding:20px 16px 110px;max-width:980px;width:100%;margin:0 auto;display:fl
 
 .btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 13px;font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:6px;line-height:1.2;min-height:38px}
 .btn:hover{border-color:var(--muted)}
+a.btn{text-decoration:none;color:inherit}
 .btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);box-shadow:0 1px 2px color-mix(in srgb,var(--accent) 35%,transparent)}
 .btn.pri:hover{filter:brightness(1.08)}
 .btn.ghost{background:transparent;border-color:transparent}
@@ -991,7 +992,7 @@ function resultsHTML(q){
   const warn = noText.length ? `<p class="muted small" style="margin-top:10px">${noText.length} ${noText.length===1?'canción no tiene':'canciones no tienen'} texto extraído y no se pueden encontrar por letra hasta revisarlas.</p>` : '';
   if(!q.trim()) return `<div class="empty">Escribe cualquier fragmento que recuerdes.</div>` + warn;
   const res = searchIndex(S.songs, S.index, q);
-  if(!res.length) return `<div class="empty">Ninguna canción de tu biblioteca contiene “${esc(q)}”. Prueba con menos palabras.</div>` + warn;
+  if(!res.length) return `<div class="empty">Ninguna canción de tu biblioteca contiene “${esc(q)}”. Prueba con menos palabras.<div style="margin-top:10px"><button class="btn" data-act="webFrom" data-q="${esc(q)}">Buscar “${esc(q)}” en internet</button></div></div>` + warn;
   const qn = normText(q);
   return `<p class="muted small">${res.length} ${res.length===1?'resultado':'resultados'}</p><div class="list" style="margin-top:8px">${res.slice(0,60).map(r => {
     const ix = S.index.get(r.song.id);
@@ -1152,6 +1153,14 @@ function connGapHTML(sl, it, ix){
     <button class="btn sm" data-act="connSet" data-ix="${ix}">${t ? 'Otras opciones' : 'Sugerir transición'}</button></div>`;
 }
 
+/* Atajos de búsqueda de acordes en internet (se abren en el navegador; la app no lee esas páginas) */
+function webLinksHTML(q){
+  q = String(q || '').trim();
+  if(!q) return '<span class="muted small">Escribe el nombre para ver las búsquedas.</span>';
+  const g = extra => 'https://www.google.com/search?q=' + encodeURIComponent(q + ' acordes' + extra);
+  const links = [['Google', g('')], ['LaCuerda', g(' site:lacuerda.net')], ['Cifra Club', g(' site:cifraclub.com')], ['YouTube (escuchar)', 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q)]];
+  return links.map(([l, u], i) => `<a class="btn${i ? '' : ' pri'}" href="${esc(u)}" target="_blank" rel="noopener noreferrer" data-web="1">${esc(l)} ↗</a>`).join('');
+}
 VIEWS.importar = () => `
   <header class="ph"><div><p class="eyebrow">Importar</p><h1>Convierte tus documentos en canciones</h1></div></header>
   <div class="drop" id="drop">
@@ -1161,6 +1170,12 @@ VIEWS.importar = () => `
     <label class="small"><input type="checkbox" id="perpage" ${S.prefs.perPage?'checked':''}> En PDF, una canción por página (cancioneros)</label>
   </div>
   ${S.jobs.length ? `<section class="sect"><header><h2>Procesados</h2>${S.jobs.some(j=>j.songIds.length)?`<button class="btn" data-act="reviewJobs">Revisar ${S.jobs.reduce((n,j)=>n+j.songIds.filter(id=>songById(id)).length,0)} canciones</button>`:''}</header><div class="list">${S.jobs.map(j=>`<div class="job"><b style="overflow-wrap:anywhere">${esc(j.name)}</b><span class="badge">${esc(j.kind||'')}</span><span class="st ${j.state}">${esc(j.status)}</span></div>`).join('')}</div></section>` : ''}
+  <section class="card" id="websearch"><h3>Buscar acordes en internet</h3>
+    <p class="muted small">Escribe el nombre de la canción (y el artista, si quieres). La búsqueda se abre en tu navegador: revisa que los acordes estén bien, cópialos y pégalos abajo en “Pega letra y acordes”.</p>
+    <input class="inp" id="wq" type="search" placeholder="Ej.: Suelto Sarai Rivera" value="${esc(S.webq || '')}" autocomplete="off">
+    <div class="row" id="wlinks">${webLinksHTML(S.webq)}</div>
+    <p class="muted small">Necesita internet. La app no copia nada de esas páginas: tú eliges qué pegar y lo revisas antes de guardarlo.</p>
+  </section>
   <form class="card" id="pasteform">
     <h3>O pega letra y acordes</h3>
     <p class="muted small">Acepta acordes encima de la letra, acordes entre corchetes dentro de la letra (<code>[G]Santo</code>) y encabezados como <code>Coro:</code> o <code>[Puente]</code>.</p>
@@ -1346,6 +1361,9 @@ const AFTER = {
     ['dragleave','drop'].forEach(ev => d.addEventListener(ev, e => { e.preventDefault(); d.classList.remove('over'); }));
     d.addEventListener('drop', e => importFiles([...e.dataTransfer.files]));
     $('#perpage').addEventListener('change', e => { S.prefs.perPage = e.target.checked; savePrefs(); });
+    const wq = $('#wq'); wq.addEventListener('input', () => { S.webq = wq.value; $('#wlinks').innerHTML = webLinksHTML(wq.value); });
+    $('#wlinks').addEventListener('click', e => { if(e.target.closest('[data-web]')){ const t = $('#pt-title'); if(!t.value.trim()) t.value = wq.value.trim(); } });
+    if(S.webScroll){ S.webScroll = false; setTimeout(() => $('#websearch') && $('#websearch').scrollIntoView({block:'start'}), 0); }
     $('#pasteform').addEventListener('submit', async e => { e.preventDefault(); const txt = $('#pt-text').value; if(!txt.trim()) return toast('Pega primero la letra y los acordes'); const s = songFromText(txt, {title:$('#pt-title').value.trim(), sourceName:'Texto pegado'}); await saveSong(s); startReview([s.id]); });
   },
   conectar(){
@@ -1654,6 +1672,7 @@ const ACT = {
   prefNoteItalic(b){ S.prefs.noteItalic = b.dataset.v === '1'; applyNotePrefs(); savePrefs(); render(); },
   noteLine(b){ markNoteLines(b.dataset.v); },
   connNew(){ S.conn = {a:null, b:null}; go('conectar'); },
+  webFrom(b){ S.webq = b.dataset.q; S.webScroll = true; S.stack = []; go('importar', {}, false); },
   connFrom(){ const s = songById(S.cur.id); S.conn = {a:{id:s.id, key: s.key ? {i:Music.mod(s.key.i + S.cur.semi), minor:s.key.minor} : null}, b:null}; go('conectar'); },
   connSet(b){ const sl = S.setlists.find(x => x.id === S.route.params.id), ix = +b.dataset.ix, it = sl.items[ix], nx = sl.items[ix + 1];
     S.conn = {a:{id:it.songId, key:it.key}, b:{id:nx.songId, key:nx.key}, setId:sl.id, ix}; go('conectar'); },

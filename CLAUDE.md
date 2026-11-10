@@ -13,6 +13,7 @@ Están hechas las fases 1, 2, 3 y 4 del plan de `docs/PROMPT_ORIGINAL.md`, todas
   - Pantalla de revisión con nivel de confianza por campo.
   - Edición, etiquetas, favoritas, recientes y detección de duplicados.
   - El documento original se guarda aparte.
+  - **Buscar acordes en internet** (en Importar, y desde Buscar cuando no hay resultados): atajos que abren en el navegador Google, LaCuerda y Cifra Club (vía Google `site:`) y YouTube. La app **no lee ni copia** esas páginas: la dueña verifica los acordes, los copia y los pega en "Pega letra y acordes". Necesita internet.
 - **Fase 2 · Motor musical**
   - Interpreta, valida y transporta acordes.
   - Selector de 12 tonos, botones de ±½ y ±1 tono, y escritura con sostenidos o bemoles.
