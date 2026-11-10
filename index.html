@@ -223,6 +223,22 @@ pre.sheet .c.bad{color:var(--warn);text-decoration:underline dotted;text-underli
 .piano.big{max-width:620px}
 .btn.big{min-height:52px;font-size:17px;padding:10px 18px}
 .pc.on{background:var(--accent-soft);box-shadow:inset 0 0 0 2px var(--accent)}
+/* Acordes del tono */
+.famwrap{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.fam-h{font-size:11.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:6px}
+.fam-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.fam-grid.two{grid-template-columns:repeat(2,1fr)}
+.fam{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px 4px;border-radius:12px;border:1px solid var(--line);background:var(--surface-2);min-height:58px;line-height:1.1}
+.fam small{font-weight:800;font-size:12px;color:var(--muted);font-family:var(--f-body)}
+.fam b{font-family:var(--f-mono);font-size:22px;color:var(--chord)}
+.fam.maj{background:var(--accent-soft)}
+.fam.dim{min-height:44px;min-width:76px;opacity:.75}.fam.dim b{font-size:16px}
+.fam.on{box-shadow:inset 0 0 0 2px var(--accent)}
+.fam-sel{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px;border-radius:12px;background:var(--surface-2);text-align:center}
+.fam-sel > b{font-size:24px;color:var(--chord)}
+.fam-sel .piano{max-width:340px}
+.fam-progs{display:grid;gap:4px;font-size:15px}
+.lv-panel .fam{font-family:var(--f-body)}
 input[type=range]{width:100%;accent-color:var(--accent)}
 .notebar .seg button{font-size:13px;min-height:32px;padding:5px 10px}
 @media (min-width:900px){.cols{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
@@ -656,6 +672,20 @@ function barEvents(voice, pattern, beat){
     rh.forEach((m, i) => ev.push({m, t:i * .015, d:bar, v:.28}));
   }
   return ev;
+}
+/* "Acordes del tono" (como la rueda del círculo de quintas): la familia de 7 acordes con sus números,
+   los acordes prestados más usados y progresiones comunes. Si el tono es menor se usa su relativa mayor (Am → C),
+   como en el sistema de números. */
+const FAM = [[1,0,''],[2,2,'m'],[3,4,'m'],[4,5,''],[5,7,''],[6,9,'m'],[7,11,'dim']];
+const BORROWED = [[10,'','b7','Muy usado en alabanza; vuelve al 1 o al 4'],[4,'','3 mayor','Lleva al 6 (al acorde menor)'],[2,'','2 mayor','Lleva al 5; también como bajo: el 2 con el 4 en el bajo'],[5,'m','4 menor','Color suave y tierno antes de volver al 1']];
+const COMMON_PROGS = ['1 5 6 4','6 4 1 5','1 4 6 5','1 6 4 5','4 5 6','4 1 5 6','2 5 1'];
+function keyFamily(key){
+  const maj = key.minor ? {i:Music.mod(key.i + 3), minor:false} : key;
+  const name = (rel, q) => Music.spellIn(Music.mod(maj.i + rel), maj) + q;
+  const chords = FAM.map(([n, rel, q]) => ({n, name:name(rel, q), q}));
+  return {maj, chords,
+    borrowed: BORROWED.map(([rel, q, n, tip]) => ({n, name:name(rel, q), tip})),
+    progs: COMMON_PROGS.map(p => ({nums:p, chords:p.split(' ').map(n => chords[+n - 1].name)}))};
 }
 /* Una progresión en el tono elegido: acordes, grados y voces de cada mano */
 function progressionIn(pr, key){
@@ -1572,6 +1602,7 @@ VIEWS.acompanar = () => {
     <div class="field"><label>Nivel</label><div class="seg">${[1,2,3].map(l => `<button data-act="accLevel" data-v="${l}" aria-pressed="${A.level === l}">${ACC_LEVELS[l]}</button>`).join('')}</div></div>
     <div class="field"><label>Estilo</label><div class="chips"><button class="chip" data-act="accStyle" data-v="" aria-pressed="${!A.style}">Todos</button>${ACC_STYLES.map(x => `<button class="chip" data-act="accStyle" data-v="${x[0]}" aria-pressed="${A.style === x[0]}">${esc(x[1])}</button>`).join('')}</div></div>
   </section>
+  <details class="card" id="acc-fam"${A.famOpen ? ' open' : ''}><summary><b>Acordes del tono de ${esc(kname(A.key))}</b> <span class="muted small">· como la rueda del círculo de quintas</span></summary>${familyHTML(A.key, A.fam, 'accFam')}</details>
   <div class="callout info acc-tips"><div><p><b>${esc(mom[1])}: ideas para empezar</b></p><ul>${mom[3].map(t => `<li>${esc(t)}</li>`).join('')}</ul>
     <p class="small">Estilos que suelen funcionar: ${mom[2].map(x => esc(ACC_STYLES.find(y => y[0] === x)[1].toLowerCase())).join(', ')}. Son sugerencias: adapta según lo que esté pasando.</p></div></div>
   ${st ? `<section class="card"><h3>${esc(st[1])}</h3><p class="small">${esc(st[2])}</p></section>` : ''}
@@ -1646,6 +1677,23 @@ function playUI(){
   document.querySelectorAll('.pc.on').forEach(x => x.classList.remove('on'));
   if(P && P.cur !== null){ const c = $('#pr-' + P.id); const pc = c && c.querySelectorAll('.pc')[P.cur]; pc && pc.classList.add('on'); }
 }
+/* "Acordes del tono": familia con números, prestados comunes y progresiones. Al tocar un acorde se ven los dedos. */
+function familyHTML(key, sel, act){
+  const F = keyFamily(key);
+  const btn = (c, id, cls) => `<button class="fam ${cls}${sel === id ? ' on' : ''}" data-act="${act}" data-v="${id}"><small>${esc(String(c.n))}</small><b>${esc(c.name)}</b></button>`;
+  const selC = sel ? (sel[0] === 'f' ? F.chords[+sel.slice(1)] : F.borrowed[+sel.slice(1)]) : null;
+  const v = selC && voiceLead([selC.name])[0];
+  return `<div class="famwrap">
+    ${key.minor ? `<p class="small muted">Estás en <b>${esc(kname(key))}</b>, que es el 6 de <b>${esc(kname(F.maj))}</b>: usan la misma familia de acordes.</p>` : ''}
+    <p class="fam-h">Mayores · los que más se usan</p><div class="fam-grid">${[0,3,4].map(i => btn(F.chords[i], 'f' + i, 'maj')).join('')}</div>
+    <p class="fam-h">Menores</p><div class="fam-grid">${[5,1,2].map(i => btn(F.chords[i], 'f' + i, 'min')).join('')}</div>
+    <div class="row">${btn(F.chords[6], 'f6', 'dim')}<span class="small muted">El 7 casi no se usa.</span></div>
+    ${v ? `<div class="fam-sel"><b class="mono">${esc(selC.name)}</b>${selC.tip ? `<span class="small muted">${esc(selC.tip)}</span>` : ''}${pianoSVG(v.rh, v.lh)}<span class="small"><span class="dot rh"></span>Derecha <b class="mono">${esc(noteNames(v.rh, F.maj))}</b> · <span class="dot lh"></span>Izquierda <b class="mono">${esc(Music.spellIn(v.lh % 12, F.maj))}</b></span></div>` : `<p class="small muted">Toca un acorde para ver dónde van los dedos.</p>`}
+    <p class="fam-h">Fuera de la familia, pero comunes</p><div class="fam-grid two">${F.borrowed.map((c, i) => btn(c, 'b' + i, 'bor')).join('')}</div>
+    <p class="fam-h">Progresiones comunes</p><div class="fam-progs">${F.progs.map(p => `<div><span class="mono muted">${esc(p.nums.split(' ').join('-'))}</span> <b class="mono">${esc(p.chords.join(' '))}</b></div>`).join('')}</div>
+    <p class="small muted">Si alguien empieza otra canción en este tono, casi siempre se mueve entre estos acordes. Para el coro prueba primero el 4 o el 6; si no, el 5.</p>
+  </div>`;
+}
 function renderAccPlay(){
   const P = S.accPlay, pr = PROGRESSIONS.find(x => x.id === P.id), A = accState();
   const k = {i:Music.mod(A.key.i + (A.off[pr.id] || 0)), minor:A.key.minor}, r = progressionIn(pr, k), i = P.i, v = r.voices[i];
@@ -1694,6 +1742,7 @@ const AFTER = {
   },
   acompanar(){ $('#acc-mom').addEventListener('change', e => { accState().moment = e.target.value; saveAcc(); render(); });
     const bpm = $('#acc-bpm'); bpm.addEventListener('input', () => { accState().bpm = +bpm.value; $('#acc-bpm-v').textContent = bpm.value; }); bpm.addEventListener('change', saveAcc);
+    $('#acc-fam').addEventListener('toggle', e => { accState().famOpen = e.target.open; });
     playUI(); },
   conectar(){
     for(const slot of ['a','b']){
@@ -1923,10 +1972,11 @@ function renderLive(keep){
       <button id="lvLock" aria-pressed="${v.locked}" title="${v.locked?'Mantén pulsado para desbloquear':'Bloquear controles'}">${v.locked?'Mantener':'Bloquear'}</button>
     </div>
     ${v.panel==='key' ? `<div class="lv-panel">${s.key ? keyGrid(curKey.i, s.key.minor, 'liveKey', s.key.i) : '<p>Confirma la tonalidad original para elegir por nombre. Usa −½ y +½.</p>'}</div>` : ''}
+    ${v.panel==='fam' ? `<div class="lv-panel">${curKey ? familyHTML(curKey, v.fam, 'liveFam') : '<p>Confirma la tonalidad original de la canción para ver sus acordes.</p>'}</div>` : ''}
     ${v.panel==='search' ? `<div class="lv-panel">${curKey ? `<p class="lv-hint">Estás en <b>${esc(Music.keyName(curKey,S.prefs.spell))}</b>. Toca <b>En ${esc(Music.keyName(curKey,S.prefs.spell))}</b> para abrir la otra canción en tu mismo tono.</p>` : ''}<input class="inp" id="lvq" type="search" placeholder="Frase, título o acorde" autocomplete="off" style="font-size:18px"><div id="lvres"></div></div>` : ''}
     <div class="lv-sheet" id="lvSheet" style="--live-size:${S.prefs.liveSize}px">${sheetHTML(s, v.semi, S.prefs.spell)}${item&&item.notes?`<div class="lv-next">Nota: ${esc(item.notes)}</div>`:''}${nextInfo}</div>
     <div class="lv-bar">
-      <div class="grp"><button data-act="liveStep" data-d="-1" aria-label="Bajar medio tono">−½</button><button data-act="liveStep" data-d="1" aria-label="Subir medio tono">+½</button><button data-act="livePanel" data-v="key">Tono</button></div>
+      <div class="grp"><button data-act="liveStep" data-d="-1" aria-label="Bajar medio tono">−½</button><button data-act="liveStep" data-d="1" aria-label="Subir medio tono">+½</button><button data-act="livePanel" data-v="key">Tono</button><button data-act="livePanel" data-v="fam">Acordes</button></div>
       <div class="grp"><button data-act="liveSize" data-d="-2" aria-label="Letra más pequeña">A−</button><button data-act="liveSize" data-d="2" aria-label="Letra más grande">A+</button><button data-act="livePanel" data-v="search" aria-label="Buscar">Buscar</button></div>
       <div class="grp">${v.history.length?`<button data-act="liveBack">Volver</button>`:''}${sl?`<button data-act="liveNav" data-d="-1" ${v.ix>0?'':'disabled'} aria-label="Canción anterior">◀</button><button data-act="liveNav" data-d="1" ${v.ix<sl.items.length-1?'':'disabled'} aria-label="Canción siguiente">▶</button>`:''}${item && s.key && v.semi!==savedSemi?`<button data-act="liveSave">Guardar tono</button>`:''}</div>
     </div>`;
@@ -2008,6 +2058,8 @@ const ACT = {
   accShift(b){ const A = accState(), d = +b.dataset.d; A.off[b.dataset.id] = d === 0 ? 0 : Music.semiNorm((A.off[b.dataset.id] || 0) + d); const y = $('#pr-' + b.dataset.id).getBoundingClientRect().top; render(); const el = $('#pr-' + b.dataset.id); if(el) window.scrollBy(0, el.getBoundingClientRect().top - y); },
   accGo(b){ const A = accState(), pr = PROGRESSIONS.find(x => x.id === b.dataset.id); if(pr.level > A.level || (A.style && !pr.styles.includes(A.style))){ A.level = 3; A.style = ''; saveAcc(); render(); } const el = $('#pr-' + pr.id); el && el.scrollIntoView({block:'start'}); },
   accPlay(b){ S.accPlay = {id:b.dataset.id, i:Player.on && Player.on.id === b.dataset.id && Player.on.cur !== null ? Player.on.cur : 0}; renderAccPlay(); },
+  accFam(b){ const A = accState(); A.fam = A.fam === b.dataset.v ? null : b.dataset.v; A.famOpen = true; const y = scrollY; render(); window.scrollTo(0, y); },
+  liveFam(b){ S.live.fam = S.live.fam === b.dataset.v ? null : b.dataset.v; renderLive(true); },
   accListen(b){ if(Player.on && Player.on.id === b.dataset.id) stopProg(); else playProg(b.dataset.id); },
   accPattern(b){ accState().pattern = b.dataset.v; saveAcc(); document.querySelectorAll('[data-act="accPattern"]').forEach(x => x.setAttribute('aria-pressed', x.dataset.v === b.dataset.v)); },
   accStep(b){ const pr = PROGRESSIONS.find(x => x.id === S.accPlay.id), n = pr.chords.split(' ').length; S.accPlay.i = Music.mod(S.accPlay.i + (+b.dataset.d)) % n; renderAccPlay(); },

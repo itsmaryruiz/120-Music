@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path');
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const eng = html.slice(html.indexOf('/*ENGINE-START*/'), html.indexOf('/*ENGINE-END*/'));
-eval(eng + ';globalThis.E={Music,parseSongText,songToText,itemsToText,searchIndex,buildIndex,checkBackup,planRestore,isNoteText,matchKey,respellSections,transitionOptions,keyRelation,rankByKey,PROGRESSIONS,progressionIn,romanOf,voiceLead,chordTones,barEvents}');
+eval(eng + ';globalThis.E={Music,parseSongText,songToText,itemsToText,searchIndex,buildIndex,checkBackup,planRestore,isNoteText,matchKey,respellSections,transitionOptions,keyRelation,rankByKey,PROGRESSIONS,progressionIn,romanOf,voiceLead,chordTones,barEvents,keyFamily}');
 const {Music} = E; let fail = 0;
 const eq = (a, b, m) => { if (JSON.stringify(a) !== JSON.stringify(b)) { fail++; console.log('FALLA', m, JSON.stringify(a), '≠', JSON.stringify(b)); } else console.log('ok  ', m); };
 const T = (c, s, k) => Music.transposeSym(c, s, Music.flatsFor(k, s, 'auto'), false);
@@ -56,6 +56,14 @@ for(const pat of ['bloque','arpegio','ritmico']){ const ev = E.barEvents(vC, pat
 eq(E.barEvents(vC, 'arpegio', beat).filter(e => vC.rh.includes(e.m)).length, 8, 'arpegio: 8 notas de la mano derecha (corcheas)');
 eq(E.barEvents(vC, 'bloque', beat).filter(e => e.m < 60).every(e => e.m % 12 === 0), true, 'el bajo toca la raíz (C)');
 eq(E.barEvents({rh:[], lh:null}, 'bloque', beat), [], 'acorde sin notas no suena');
+/* Acordes del tono */
+eq(E.keyFamily({i:0,minor:false}).chords.map(c => c.name), ['C','Dm','Em','F','G','Am','Bdim'], 'familia de C: 1 C, 2 Dm, 3 Em, 4 F, 5 G, 6 Am, 7 Bdim');
+eq(E.keyFamily({i:9,minor:true}).chords.map(c => c.name), ['C','Dm','Em','F','G','Am','Bdim'], 'Am usa la familia de su relativa C');
+eq(E.keyFamily({i:7,minor:false}).chords.map(c => c.name), ['G','Am','Bm','C','D','Em','F#dim'], 'familia de G (como la rueda)');
+eq(E.keyFamily({i:3,minor:false}).chords.map(c => c.name), ['Eb','Fm','Gm','Ab','Bb','Cm','Ddim'], 'familia de Eb con bemoles');
+eq(E.keyFamily({i:0,minor:false}).borrowed.map(c => c.name), ['Bb','E','D','Fm'], 'prestados en C: Bb, E, D, Fm');
+eq(E.keyFamily({i:6,minor:false}).borrowed.map(c => c.name), ['E','A#','G#','Bm'], 'prestados en F#');
+eq(E.keyFamily({i:0,minor:false}).progs[0], {nums:'1 5 6 4', chords:['C','G','Am','F']}, 'progresión 1-5-6-4 en C');
 /* Fase 4: transiciones */
 const K = (i, minor=false) => ({i, minor});
 const to = (a, b) => E.transitionOptions(a, b).map(o => [o.id, o.chords.join(' ')]);
