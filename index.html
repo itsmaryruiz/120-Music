@@ -311,13 +311,25 @@ const Music = (() => {
     if(origKey) return keyFlats({i:mod(origKey.i + semi), minor:origKey.minor});
     return !!hint;
   }
-  /* Devuelve el símbolo transpuesto. Si el acorde no se reconoce, se devuelve intacto. */
-  function transposeSym(raw, semi, flats, respell){
+  /* Escritura correcta de una nota dentro de una tonalidad, según su función:
+     en Dm el VI grado es Bb (no A#); en C el bVII es Bb y el #IV es F#.
+     Se evitan Fb, Cb, E#, B# y dobles alteraciones (se usa la escritura simple de la tonalidad). */
+  const LET = ['C','D','E','F','G','A','B'], NAT = [0,2,4,5,7,9,11], DEG = [0,1,1,2,2,3,3,4,5,5,6,6];
+  function spellIn(pc, key){
+    const L = (LET.indexOf(spell(key.i, keyFlats(key))[0]) + DEG[mod(pc - key.i)]) % 7;
+    let acc = mod(pc - NAT[L]); if(acc > 6) acc -= 12;
+    const name = acc === 0 ? LET[L] : acc === 1 ? LET[L] + '#' : acc === -1 ? LET[L] + 'b' : null;
+    return !name || ['Fb','Cb','E#','B#'].includes(name) ? spell(pc, keyFlats(key)) : name;
+  }
+  /* Devuelve el símbolo transpuesto. Si el acorde no se reconoce, se devuelve intacto.
+     Con `key` (tonalidad de llegada) cada nota se escribe según su función en esa tonalidad. */
+  function transposeSym(raw, semi, flats, respell, key){
     const p = parse(raw);
     if(!p) return raw;
     if(mod(semi) === 0 && !respell) return raw;
-    let out = spell(p.root + semi, flats) + p.qual;
-    if(p.bassRaw) out += '/' + (p.bass === null ? p.bassRaw : spell(p.bass + semi, flats));
+    const sp = n => key ? spellIn(n, key) : spell(n, flats);
+    let out = sp(p.root + semi) + p.qual;
+    if(p.bassRaw) out += '/' + (p.bass === null ? p.bassRaw : sp(p.bass + semi));
     return out;
   }
   function keyName(k, pref){
@@ -371,8 +383,23 @@ const Music = (() => {
     return (d > 0 ? '+' : '−') + t;
   }
   const semiBetween = (from, to) => semiNorm(to.i - from.i);
-  return {parse, triad, spell, keyFlats, flatsFor, transposeSym, keyName, parseKey, estimateKey, semiNorm, semiLabel, semiBetween, mod};
+  return {parse, triad, spell, spellIn, keyFlats, flatsFor, transposeSym, keyName, parseKey, estimateKey, semiNorm, semiLabel, semiBetween, mod};
 })();
+
+/* Acordes bien reconocidos pero mal escritos para la tonalidad (A# en Dm → Bb).
+   Devuelve una copia de las secciones corregidas (cada acorde cambiado guarda `was`) y la lista de cambios. */
+function respellSections(sections, key){
+  const changes = new Map();
+  const out = sections.map(sec => ({...sec, lines: sec.lines.map(ln => ({...ln, chords: ln.chords.map(c => {
+    if(!c.ok || !key) return c;
+    const norm = c.raw.replace(/♯/g,'#').replace(/♭/g,'b'), t = Music.transposeSym(norm, 0, false, true, key);
+    if(t === norm) return c;
+    const k = c.raw + ' → ' + t; changes.set(k, (changes.get(k) || 0) + 1);
+    return {...c, raw:t, was:c.raw};
+  })}))}));
+  return {sections:out, changes:[...changes].map(([k, n]) => { const [from, to] = k.split(' → '); return {from, to, n}; })};
+}
+function spellChangesText(ch){ return ch.map(c => `${c.from} → ${c.to}${c.n > 1 ? ` (${c.n} veces)` : ''}`).join(', '); }
 
 /* Tono para encadenar canciones: el mismo tono que se está tocando; si una es mayor y la otra menor, su relativa (mismas notas: C ↔ Am) */
 function matchKey(songKey, target){
@@ -788,7 +815,8 @@ async function savePrefs(){ await dbPut('prefs', S.prefs); }
 function applyNotePrefs(){ const r = document.documentElement; r.dataset.note = S.prefs.noteColor || 'red'; r.dataset.noteItalic = S.prefs.noteItalic === false ? '0' : '1'; }
 function flatHint(song){ let f=0, sh=0; for(const s of song.sections) for(const l of s.lines) for(const c of l.chords){ if(/^[A-G]b/.test(c.raw)) f++; if(/^[A-G]#/.test(c.raw)) sh++; } return f > sh; }
 function edgeChords(song){ const all = []; for(const s of song.sections) for(const l of s.lines) for(const c of [...l.chords].sort((a,b)=>a.pos-b.pos)) if(c.ok) all.push(c.raw); return {first:all[0]||null, last:all[all.length-1]||null}; }
-function tr(song, raw, semi, pref){ if(!raw) return '—'; return Music.transposeSym(raw, semi, Music.flatsFor(song.key, semi, pref, flatHint(song)), pref!=='auto'); }
+const targetKey = (song, semi, pref) => pref === 'auto' && song.key ? {i:Music.mod(song.key.i + semi), minor:song.key.minor} : null;
+function tr(song, raw, semi, pref){ if(!raw) return '—'; return Music.transposeSym(raw, semi, Music.flatsFor(song.key, semi, pref, flatHint(song)), pref!=='auto', targetKey(song, semi, pref)); }
 function unknownChords(song){ const u = new Set(); for(const s of song.sections) for(const l of s.lines) for(const c of l.chords) if(!c.ok) u.add(c.raw); return [...u]; }
 function hasText(song){ return song.sections.some(s => s.lines.some(l => l.lyric.trim() || l.chords.length)); }
 function dupInfo(){
@@ -802,10 +830,10 @@ function dupInfo(){
 }
 
 /* ================= HOJA DE ACORDES ================= */
-function chordLineHTML(chords, semi, flats, respell){
+function chordLineHTML(chords, semi, flats, respell, key){
   let len = 0, html = '';
   for(const c of [...chords].sort((a,b)=>a.pos-b.pos)){
-    const t = c.ok ? Music.transposeSym(c.raw, semi, flats, respell) : c.raw;
+    const t = c.ok ? Music.transposeSym(c.raw, semi, flats, respell, key) : c.raw;
     const col = Math.max(c.pos, len ? len+1 : 0);
     html += ' '.repeat(col - len) + (c.ok ? `<b class="c">${esc(t)}</b>` : `<b class="c bad" title="Acorde no reconocido: no se transporta">${esc(t)}</b>`);
     len = col + t.length;
@@ -816,7 +844,7 @@ function chordLineHTML(chords, semi, flats, respell){
 const inlineNotes = h => h.replace(/\((?:\s*x\s*\d+|\s*\d+\s*x|\s*bis|\s*se\s+repite[^)]*|\s*\d+\s+veces|\s*(?:dos|tres|cuatro)\s+veces)\s*\)/gi, m => `<i class="note-in">${m}</i>`);
 function sheetHTML(song, semi, pref){
   if(!hasText(song)) return `<div class="empty">Esta canción todavía no tiene letra ni acordes. Ábrela en <b>Editar</b> para transcribirla viendo el documento original.</div>`;
-  const flats = Music.flatsFor(song.key, semi, pref, flatHint(song)), respell = pref !== 'auto';
+  const flats = Music.flatsFor(song.key, semi, pref, flatHint(song)), respell = pref !== 'auto', tk = targetKey(song, semi, pref);
   return song.sections.map(sec => {
     /* Las notas ("Se repite"...) van en su propio renglón, fuera del bloque monoespaciado, para poder alinearlas */
     const parts = []; let buf = [];
@@ -824,7 +852,7 @@ function sheetHTML(song, semi, pref){
     for(const ln of sec.lines){
       if(ln.note){ close(); parts.push(`<p class="note" data-align="${esc(ln.note)}">${esc(ln.lyric)}</p>`); continue; }
       let out = '';
-      if(ln.chords.length) out += chordLineHTML(ln.chords, semi, flats, respell) + (ln.lyric ? '\n' : '');
+      if(ln.chords.length) out += chordLineHTML(ln.chords, semi, flats, respell, tk) + (ln.lyric ? '\n' : '');
       if(ln.lyric || !ln.chords.length) out += inlineNotes(esc(ln.lyric));
       buf.push(out);
     }
@@ -1070,6 +1098,7 @@ VIEWS.revisar = () => {
   return `
   <header class="ph"><div><button class="linkbtn" data-act="back">← Salir de la revisión</button><p class="eyebrow">Revisión ${R.queue.length>1?`· ${R.pos+1} de ${R.queue.length}`:''} ${s.sourceName?'· '+esc(s.sourceName):''}</p><h1>${s.status==='ok'?'Editar canción':'Confirma lo reconocido'}</h1></div>
     <div class="row">${s.sourceFileId?`<button class="btn" data-act="original" data-id="${s.sourceFileId}">Ver original</button>`:''}<button class="btn pri" data-act="confirmReview">${R.pos<R.queue.length-1?'Guardar y siguiente':'Guardar'}</button></div></header>
+  ${s.status !== 'ok' && s.meta && s.meta.spellFix && s.meta.spellFix.length ? `<div class="callout info" id="rv-spellfix"><p>Corregí la escritura de ${pl(s.meta.spellFix.reduce((n,c)=>n+c.n,0),'acorde','acordes')} para que coincida con la tonalidad ${esc(Music.keyName(s.key,'auto'))}: <b>${esc(spellChangesText(s.meta.spellFix))}</b>. Suenan igual; solo cambia cómo se escriben.</p><button class="btn sm" data-act="undoSpell">Dejar como venía</button></div>` : ''}
   ${s.status==='sin-texto'?`<div class="callout"><p>No se encontró texto en este documento (posible PDF escaneado). Transcribe la letra y los acordes mirando el original.</p></div>`:''}
   <section class="card"><div class="grid2">
     <div class="field"><label for="rv-title">Título ${cb(conf.title)}</label><input class="inp" id="rv-title" value="${esc(s.title)}"></div>
@@ -1093,7 +1122,11 @@ function updateReviewPreview(){
   const tmp = {sections:p.sections, key:null};
   $('#rv-prev').innerHTML = sheetHTML(tmp, 0, 'auto');
   const secs = p.sections.filter(s=>s.label).map(s=>s.label);
-  $('#rv-stats').innerHTML = `<div class="row" style="margin-bottom:6px"><span class="badge ok">${p.stats.chords} acordes reconocidos</span>${p.stats.unknown.length?`<span class="badge warn">Sin reconocer: ${p.stats.unknown.slice(0,8).map(esc).join(', ')}</span>`:''}<span class="badge">${p.stats.lyricLines} líneas de letra</span><span class="badge">${secs.length?esc(secs.join(' · ')):'Sin secciones marcadas'}</span></div>`;
+  const kv = $('#rv-key').value, key = kv === '' ? null : {i:+kv, minor:$('#rv-mode').value === 'min'};
+  const fx = key ? respellSections(p.sections, key) : {changes:[]};
+  S.review.spell = fx.changes;
+  const spellHTML = fx.changes.length ? `<div class="callout" style="margin-bottom:8px"><p>En ${esc(Music.keyName(key,'auto'))} ${fx.changes.length === 1 ? 'este acorde se escribe' : 'estos acordes se escriben'} distinto: <b>${esc(spellChangesText(fx.changes))}</b></p><button class="btn sm" data-act="fixSpell">Corregir</button></div>` : '';
+  $('#rv-stats').innerHTML = spellHTML + `<div class="row" style="margin-bottom:6px"><span class="badge ok">${p.stats.chords} acordes reconocidos</span>${p.stats.unknown.length?`<span class="badge warn">Sin reconocer: ${p.stats.unknown.slice(0,8).map(esc).join(', ')}</span>`:''}<span class="badge">${p.stats.lyricLines} líneas de letra</span><span class="badge">${secs.length?esc(secs.join(' · ')):'Sin secciones marcadas'}</span></div>`;
 }
 
 VIEWS.ajustes = () => `
@@ -1168,7 +1201,7 @@ const AFTER = {
     $('#perpage').addEventListener('change', e => { S.prefs.perPage = e.target.checked; savePrefs(); });
     $('#pasteform').addEventListener('submit', async e => { e.preventDefault(); const txt = $('#pt-text').value; if(!txt.trim()) return toast('Pega primero la letra y los acordes'); const s = songFromText(txt, {title:$('#pt-title').value.trim(), sourceName:'Texto pegado'}); await saveSong(s); startReview([s.id]); });
   },
-  revisar(){ const ta = $('#rv-text'); if(!ta) return; let t; ta.addEventListener('input', () => { clearTimeout(t); t = setTimeout(updateReviewPreview, 180); }); updateReviewPreview(); }
+  revisar(){ const ta = $('#rv-text'); if(!ta) return; let t; ta.addEventListener('input', () => { clearTimeout(t); t = setTimeout(updateReviewPreview, 180); }); ['#rv-key','#rv-mode'].forEach(sel => $(sel).addEventListener('change', updateReviewPreview)); updateReviewPreview(); }
 };
 
 /* ================= IMPORTACIÓN ================= */
@@ -1176,8 +1209,10 @@ function songFromText(text, {title='', fileName='', sourceName='', fileId=null}=
   const p = parseSongText(text, {fileName});
   const conf = {...p.meta.conf}; if(title) conf.title = 'alta';
   const empty = !p.stats.lyricLines && !p.stats.chords;
+  /* Si la tonalidad se detectó con seguridad, se corrige la escritura de los acordes (A# en Dm → Bb) y se avisa en la revisión */
+  const fix = p.meta.key && conf.key !== 'baja' ? respellSections(p.sections, p.meta.key) : {sections:p.sections, changes:[]};
   return {id:uid(), title:title || p.meta.title || 'Sin título', artist:p.meta.artist || '', key:p.meta.key, conf,
-    sections:p.sections, meta:{notes:p.meta.notes}, tags:[], favorite:false, createdAt:Date.now(), updatedAt:Date.now(), lastOpened:0,
+    sections:fix.sections, meta:{notes:p.meta.notes, spellFix:fix.changes.length ? fix.changes : undefined}, tags:[], favorite:false, createdAt:Date.now(), updatedAt:Date.now(), lastOpened:0,
     sourceFileId:fileId, sourceName: sourceName || fileName, status: empty ? 'sin-texto' : 'revisar'};
 }
 async function pdfExtract(buf, perPage){
@@ -1252,6 +1287,14 @@ async function openOriginal(fileId){
   }catch(e){ body.innerHTML = `<p>No se pudo mostrar el original: ${esc(e.message||'')}</p>`; }
 }
 
+/* Editor: cambia acordes completos (A#m7 → Bbm7) solo en renglones de acordes; mismo largo, así no se mueve nada */
+function swapChordTokens(text, pairs){
+  const map = new Map(pairs);
+  return text.split('\n').map(l => {
+    if(!analyzeChordLine(l).isChord && !HEADER_RE.test(l.trim())) return l;
+    return l.replace(/[^\s]+/g, tok => map.has(tok) ? map.get(tok) : tok);
+  }).join('\n');
+}
 /* Editor: convierte en nota (o vuelve a letra) los renglones que toca la selección */
 function markNoteLines(align){
   const ta = $('#rv-text'); if(!ta) return;
@@ -1435,6 +1478,7 @@ const ACT = {
     const kv = $('#rv-key').value; s.key = kv === '' ? null : {i:+kv, minor:$('#rv-mode').value==='min'};
     s.tags = $('#rv-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
     s.sections = p.sections; s.conf = {title:'alta', artist:s.artist?'alta':'baja', key:s.key?'alta':'baja'};
+    if(s.meta) delete s.meta.spellFix;
     s.status = (p.stats.lyricLines || p.stats.chords) ? 'ok' : 'sin-texto';
     await saveSong(s); toast('Canción guardada'); nextReview();
   },
@@ -1452,6 +1496,8 @@ const ACT = {
   prefNoteColor(b){ S.prefs.noteColor = b.dataset.v; applyNotePrefs(); savePrefs(); render(); },
   prefNoteItalic(b){ S.prefs.noteItalic = b.dataset.v === '1'; applyNotePrefs(); savePrefs(); render(); },
   noteLine(b){ markNoteLines(b.dataset.v); },
+  fixSpell(){ const ch = S.review.spell || []; if(!ch.length) return; const ta = $('#rv-text'); ta.value = swapChordTokens(ta.value, ch.map(c => [c.from, c.to])); updateReviewPreview(); toast('Escritura corregida'); },
+  undoSpell(){ const s = songById(S.review.queue[S.review.pos]); const ch = (s.meta && s.meta.spellFix) || []; const ta = $('#rv-text'); ta.value = swapChordTokens(ta.value, ch.map(c => [c.to, c.from])); delete s.meta.spellFix; const box = $('#rv-spellfix'); box && box.remove(); updateReviewPreview(); toast('Acordes como venían en el documento'); },
   autoNotes(){ const ta = $('#rv-text'); let n = 0; ta.value = ta.value.split('\n').map(l => { if(/^\s*\{/.test(l) || !isNoteText(l)) return l; n++; return noteDirective(l.trim(), 'left'); }).join('\n'); updateReviewPreview(); toast(n ? `${n} ${n===1?'frase marcada':'frases marcadas'} como nota` : 'No encontré frases como “Se repite” o “x2”'); },
   async exportBackup(b){
     b.disabled = true; const t = b.textContent; b.textContent = 'Preparando…';

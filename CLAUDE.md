@@ -16,6 +16,8 @@ Están hechas las fases 1, 2 y 3 del plan de `docs/PROMPT_ORIGINAL.md`, todas fu
 - **Fase 2 · Motor musical**
   - Interpreta, valida y transporta acordes.
   - Selector de 12 tonos, botones de ±½ y ±1 tono, y escritura con sostenidos o bemoles.
+  - **Escritura según la tonalidad** (`Music.spellIn`): cada nota se escribe por su función (en Dm el VI es Bb, no A#; en C el bVII es Bb y el #IV es F#). Nunca Cb, Fb, E#, B#. Se usa al transportar en modo "Según la tonalidad".
+  - **Al importar** (si la tonalidad se detectó con seguridad) `respellSections` corrige la escritura y la revisión avisa qué cambió, con "Dejar como venía". En el editor, si algún acorde está mal escrito para la tonalidad elegida, aparece un aviso con "Corregir". En el tono original se muestra lo guardado tal cual.
   - Filtro por tonalidad con tres modos: original, asignada en servicios y transportables.
 - **Fase 3 · Modo en vivo y servicios**
   - Listas de servicio con tono propio por canción, notas, enlace con la siguiente y opción de duplicar.

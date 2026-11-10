@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path');
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const eng = html.slice(html.indexOf('/*ENGINE-START*/'), html.indexOf('/*ENGINE-END*/'));
-eval(eng + ';globalThis.E={Music,parseSongText,songToText,itemsToText,searchIndex,buildIndex,checkBackup,planRestore,isNoteText,matchKey}');
+eval(eng + ';globalThis.E={Music,parseSongText,songToText,itemsToText,searchIndex,buildIndex,checkBackup,planRestore,isNoteText,matchKey,respellSections}');
 const {Music} = E; let fail = 0;
 const eq = (a, b, m) => { if (JSON.stringify(a) !== JSON.stringify(b)) { fail++; console.log('FALLA', m, JSON.stringify(a), '≠', JSON.stringify(b)); } else console.log('ok  ', m); };
 const T = (c, s, k) => Music.transposeSym(c, s, Music.flatsFor(k, s, 'auto'), false);
@@ -29,6 +29,21 @@ eq(ps.sections.map(x => [x.type, x.label]), [['verso','Verso 1'],['interludio','
 eq(ps.sections[1].lines[0].chords.map(c => c.raw), ['C','G','Am','F'], 'los acordes del intermedio quedan dentro de su sección');
 eq(E.parseSongText(E.songToText({sections:ps.sections}), {bodyOnly:true}).sections.map(x => x.label), ps.sections.map(x => x.label), 'los títulos se conservan al editar');
 eq(E.parseSongText('[G]Hola [D]mundo', {bodyOnly:true}).sections[0].lines[0].chords.length, 2, 'ChordPro [G]palabra sigue funcionando');
+/* Escritura de acordes según la tonalidad */
+const Dm = {i:2, minor:true}, Ck = {i:0, minor:false};
+const sp = (c, k) => Music.transposeSym(c, 0, false, true, k);
+eq(['Dm','A#','F','C','A#maj7','C/A#'].map(c => sp(c, Dm)), ['Dm','Bb','F','C','Bbmaj7','C/Bb'], 'en Dm, A# se escribe Bb');
+eq(['C','Bb','Gb/F#'.split('/')[0],'D/F#','A#','Ab','Eb'].map(c => sp(c, Ck)), ['C','Bb','F#','D/F#','Bb','Ab','Eb'], 'en C: Bb, Ab y Eb se quedan; F# se queda');
+eq(['D#m','A#','Gb'].map(c => sp(c, {i:4, minor:false})), ['D#m','A#','F#'], 'en E mayor: D#m, A# y F# (sostenidos)');
+eq(['Cb','Fb','B','E'].map(c => sp(c, {i:3, minor:false})), ['B','E','B','E'], 'nunca escribe Cb ni Fb');
+eq(Music.transposeSym('Bb', 2, false, false, {i:2, minor:false}), 'C', 'al transportar de C a D, Bb pasa a C');
+eq(Music.transposeSym('Eb', 2, false, false, {i:4, minor:false}), 'F', 'al transportar a E, Eb pasa a F (no E#)');
+const rs = E.respellSections(E.parseSongText('Dm      A#     F    C\nletra de prueba aquí\nA#m7   Gm', {bodyOnly:true}).sections, Dm);
+eq(rs.changes, [{from:'A#', to:'Bb', n:1}, {from:'A#m7', to:'Bbm7', n:1}], 'lista lo que corrigió');
+eq(rs.sections[0].lines[0].chords.map(c => [c.raw, c.pos]), [['Dm',0],['Bb',8],['F',15],['C',20]], 'corrige sin mover los acordes de lugar');
+eq(E.respellSections(E.parseSongText('C  G  Am  F', {bodyOnly:true}).sections, Ck).changes, [], 'si todo está bien escrito no cambia nada');
+const imp = E.parseSongText('Tono: Dm\nDm   A#\nletra', {});
+eq(imp.sections[0].lines[0].chords.map(c => c.raw), ['Dm','A#'], 'leer el documento no cambia nada por sí solo (la corrección se hace al importar y se avisa)');
 /* Abrir otra canción en el tono que se está tocando */
 const C = {i:0, minor:false};
 eq(E.matchKey({i:2, minor:false}, C), {i:0, minor:false, relative:false}, 'canción en D se abre en C si estoy en C');
