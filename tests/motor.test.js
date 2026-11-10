@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path');
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const eng = html.slice(html.indexOf('/*ENGINE-START*/'), html.indexOf('/*ENGINE-END*/'));
-eval(eng + ';globalThis.E={Music,parseSongText,songToText,itemsToText,searchIndex,buildIndex,checkBackup,planRestore,isNoteText,matchKey,respellSections,transitionOptions,keyRelation,rankByKey,PROGRESSIONS,progressionIn,romanOf,voiceLead,chordTones}');
+eval(eng + ';globalThis.E={Music,parseSongText,songToText,itemsToText,searchIndex,buildIndex,checkBackup,planRestore,isNoteText,matchKey,respellSections,transitionOptions,keyRelation,rankByKey,PROGRESSIONS,progressionIn,romanOf,voiceLead,chordTones,barEvents}');
 const {Music} = E; let fail = 0;
 const eq = (a, b, m) => { if (JSON.stringify(a) !== JSON.stringify(b)) { fail++; console.log('FALLA', m, JSON.stringify(a), '≠', JSON.stringify(b)); } else console.log('ok  ', m); };
 const T = (c, s, k) => Music.transposeSym(c, s, Music.flatsFor(k, s, 'auto'), false);
@@ -50,6 +50,12 @@ eq(vl.map(v => v.lh % 12), [0, 11, 9, 5], 'mano izquierda toca el bajo (B en G/B
 eq(E.PROGRESSIONS.every(p => p.chords.split(' ').every(c => E.chordTones(c))), true, 'todas las progresiones usan acordes válidos');
 for(const k of [0,1,3,6,8,11]) for(const pr of E.PROGRESSIONS){ const r = E.progressionIn(pr, K5(k, pr.minor)); if(r.chords.some(c => /E#|B#|Cb|Fb|##|bb/.test(c))) { fail++; console.log('FALLA escritura rara', pr.id, k, r.chords); } }
 console.log('ok   ninguna progresión en ningún tono usa escrituras raras (E#, Cb…)');
+/* Escuchar progresiones: patrones */
+const vC = E.voiceLead(['C'])[0], beat = 60/72;
+for(const pat of ['bloque','arpegio','ritmico']){ const ev = E.barEvents(vC, pat, beat); eq(ev.length > 0 && ev.every(e => e.t >= 0 && e.t < 4*beat && e.d > 0 && e.v > 0 && e.v <= 1), true, `patrón ${pat}: notas dentro del compás`); }
+eq(E.barEvents(vC, 'arpegio', beat).filter(e => vC.rh.includes(e.m)).length, 8, 'arpegio: 8 notas de la mano derecha (corcheas)');
+eq(E.barEvents(vC, 'bloque', beat).filter(e => e.m < 60).every(e => e.m % 12 === 0), true, 'el bajo toca la raíz (C)');
+eq(E.barEvents({rh:[], lh:null}, 'bloque', beat), [], 'acorde sin notas no suena');
 /* Fase 4: transiciones */
 const K = (i, minor=false) => ({i, minor});
 const to = (a, b) => E.transitionOptions(a, b).map(o => [o.id, o.chords.join(' ')]);

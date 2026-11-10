@@ -222,6 +222,8 @@ pre.sheet .c.bad{color:var(--warn);text-decoration:underline dotted;text-underli
 .accbig .bigch{font-family:var(--f-mono);font-weight:700;font-size:clamp(48px,14vw,84px);color:var(--chord);line-height:1}
 .piano.big{max-width:620px}
 .btn.big{min-height:52px;font-size:17px;padding:10px 18px}
+.pc.on{background:var(--accent-soft);box-shadow:inset 0 0 0 2px var(--accent)}
+input[type=range]{width:100%;accent-color:var(--accent)}
 .notebar .seg button{font-size:13px;min-height:32px;padding:5px 10px}
 @media (min-width:900px){.cols{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
@@ -637,6 +639,24 @@ const PROGRESSIONS = [
    desc:'Acordes con 7ª y 9ª: un menor abierto y moderno.', lh:'Raíces largas.',
    vary:['Resuelve Gsus4 → G → Am9.','Arpegia la mano derecha muy lento.']}
 ];
+/* Patrones para escuchar una progresión. Cada compás = 4 tiempos.
+   Devuelve las notas de un compás: {m: nota MIDI, t: segundos desde el inicio del compás, d: duración, v: volumen} */
+const PATTERNS = [['bloque','Acordes largos'],['arpegio','Arpegio'],['ritmico','Rítmico']];
+function barEvents(voice, pattern, beat){
+  const ev = [], bar = 4 * beat, rh = voice.rh, lh = voice.lh;
+  if(lh === null || !rh || !rh.length) return ev;
+  if(pattern === 'arpegio'){
+    ev.push({m:lh, t:0, d:bar, v:.5});
+    [0,1,2,1,0,1,2,1].forEach((k, i) => ev.push({m:rh[k], t:i * beat / 2, d:beat * 1.5, v:.3}));
+  } else if(pattern === 'ritmico'){
+    for(const b of [0, 2]){ ev.push({m:lh, t:b * beat, d:beat * 1.2, v:.5}); ev.push({m:lh - 12, t:b * beat, d:beat * 1.2, v:.32}); }
+    for(const b of [1, 3, 3.5]) rh.forEach(m => ev.push({m, t:b * beat, d:beat * .6, v:.26}));
+  } else {
+    ev.push({m:lh, t:0, d:bar, v:.5}); ev.push({m:lh - 12, t:0, d:bar, v:.3});
+    rh.forEach((m, i) => ev.push({m, t:i * .015, d:bar, v:.28}));
+  }
+  return ev;
+}
 /* Una progresión en el tono elegido: acordes, grados y voces de cada mano */
 function progressionIn(pr, key){
   const from = pr.minor ? 9 : 0, semi = Music.semiNorm(key.i - from);
@@ -1506,10 +1526,10 @@ VIEWS.conectar = () => {
 /* ================= ACOMPAÑAMIENTO (fase 5) ================= */
 const ACC_LEVELS = ['','Básico','Intermedio','Avanzado'];
 function accState(){
-  if(!S.acc){ const a = S.prefs.acc || {}; S.acc = {key:a.key || {i:0, minor:false}, moment:a.moment || 'predica', level:a.level || 1, style:a.style || '', off:{}}; }
+  if(!S.acc){ const a = S.prefs.acc || {}; S.acc = {key:a.key || {i:0, minor:false}, moment:a.moment || 'predica', level:a.level || 1, style:a.style || '', pattern:a.pattern || 'bloque', bpm:a.bpm || 72, off:{}}; }
   return S.acc;
 }
-function saveAcc(){ const A = S.acc; S.prefs.acc = {key:A.key, moment:A.moment, level:A.level, style:A.style}; savePrefs(); }
+function saveAcc(){ const A = S.acc; S.prefs.acc = {key:A.key, moment:A.moment, level:A.level, style:A.style, pattern:A.pattern, bpm:A.bpm}; savePrefs(); }
 /* Teclado de C3 a A5: mano derecha en azul, mano izquierda (bajo) en violeta */
 function pianoSVG(rh, lh, big){
   const LO = 48, HI = 81, W = 10, H = 40, whites = [];
@@ -1535,7 +1555,7 @@ function progCardHTML(pr, A){
       <ul class="small">${pr.vary.map(v => `<li>${esc(v)}</li>`).join('')}</ul>
       ${alts.length ? `<p class="small muted">Para no repetir siempre lo mismo, prueba con progresiones que comparten acordes:</p><div class="row">${alts.map(x => `<button class="btn sm" data-act="accGo" data-id="${x.id}">${esc(x.name)}</button>`).join('')}</div>` : ''}
     </details>
-    <div class="row"><span class="small muted">Transportar:</span><button class="btn sm" data-act="accShift" data-id="${pr.id}" data-d="-1" aria-label="Bajar medio tono">−½</button><button class="btn sm" data-act="accShift" data-id="${pr.id}" data-d="1" aria-label="Subir medio tono">+½</button>${off ? `<button class="btn sm ghost" data-act="accShift" data-id="${pr.id}" data-d="0">Volver a ${esc(kname(A.key))}</button>` : ''}<button class="btn sm pri" data-act="accPlay" data-id="${pr.id}">Ver en grande</button></div>
+    <div class="row"><span class="small muted">Transportar:</span><button class="btn sm" data-act="accShift" data-id="${pr.id}" data-d="-1" aria-label="Bajar medio tono">−½</button><button class="btn sm" data-act="accShift" data-id="${pr.id}" data-d="1" aria-label="Subir medio tono">+½</button>${off ? `<button class="btn sm ghost" data-act="accShift" data-id="${pr.id}" data-d="0">Volver a ${esc(kname(A.key))}</button>` : ''}<button class="btn sm" data-act="accListen" data-id="${pr.id}">▶ Escuchar</button><button class="btn sm" data-act="accPlay" data-id="${pr.id}">Ver en grande</button></div>
   </article>`;
 }
 VIEWS.acompanar = () => {
@@ -1557,9 +1577,75 @@ VIEWS.acompanar = () => {
   ${st ? `<section class="card"><h3>${esc(st[1])}</h3><p class="small">${esc(st[2])}</p></section>` : ''}
   <details class="card"><summary><b>Guía práctica de piano</b></summary><ul class="small">${ACC_GUIDE.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
     <p class="small muted">En el teclado: <span class="dot rh"></span>mano derecha · <span class="dot lh"></span>mano izquierda (bajo). Las posiciones de la mano derecha están elegidas para mover los dedos lo menos posible.</p></details>
+  <section class="card"><h3>Escuchar</h3>
+    <div class="field"><label>Patrón</label><div class="seg">${PATTERNS.map(([v, l]) => `<button data-act="accPattern" data-v="${v}" aria-pressed="${(A.pattern || 'bloque') === v}">${l}</button>`).join('')}</div></div>
+    <div class="field"><label for="acc-bpm">Tempo: <b id="acc-bpm-v">${A.bpm || 72}</b> por minuto</label><input id="acc-bpm" type="range" min="50" max="130" step="2" value="${A.bpm || 72}"></div>
+    <p class="muted small">Toca <b>▶ Escuchar</b> en una progresión: suena en bucle y se ilumina el acorde que está sonando. Si no oyes nada en el iPhone, revisa que no esté en silencio.</p></section>
   <p class="muted small">${pl(list.length, 'progresión', 'progresiones')} en ${esc(kname(A.key))}${A.level < 3 ? ` hasta nivel ${ACC_LEVELS[A.level].toLowerCase()}` : ''}. Ninguna es “la correcta” para un momento: elige la que mejor acompañe y adáptala.</p>
   ${list.map(pr => progCardHTML(pr, A)).join('') || `<div class="empty">No hay progresiones con ese estilo en este nivel. Prueba con <b>Todos</b> o sube el nivel.</div>`}`;
 };
+/* Sonido: piano sencillo generado en el momento (Web Audio). Funciona sin internet, sin archivos de sonido. */
+const Player = {ctx:null, out:null, bus:null, on:null, timer:0};
+function audioCtx(){
+  if(!Player.ctx){
+    const AC = window.AudioContext || window.webkitAudioContext; if(!AC) return null;
+    Player.ctx = new AC();
+    const comp = Player.ctx.createDynamicsCompressor(), g = Player.ctx.createGain(); g.gain.value = .7;
+    g.connect(comp); comp.connect(Player.ctx.destination); Player.out = g;
+    try{ if(navigator.audioSession) navigator.audioSession.type = 'playback'; }catch(e){}
+  }
+  if(Player.ctx.state === 'suspended') Player.ctx.resume();
+  return Player.ctx;
+}
+function synthNote(m, t, d, vel){
+  const ctx = Player.ctx, f = 440 * Math.pow(2, (m - 69) / 12);
+  const g = ctx.createGain(), lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass'; lp.frequency.setValueAtTime(Math.min(9000, f * 9), t); lp.frequency.exponentialRampToValueAtTime(Math.max(500, f * 2.5), t + 1.2);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vel, t + .006);
+  g.gain.setTargetAtTime(vel * .18, t + .01, .7); g.gain.setTargetAtTime(0, t + d, .12);
+  lp.connect(g); g.connect(Player.bus);
+  for(const [type, mult, amp, det] of [['triangle',1,1,0], ['sine',2,.3,3], ['sine',3,.1,-4]]){
+    const o = ctx.createOscillator(), og = ctx.createGain();
+    o.type = type; o.frequency.value = f * mult; o.detune.value = det; og.gain.value = amp;
+    o.connect(og); og.connect(lp); o.start(t); o.stop(t + d + 1);
+  }
+}
+function playProg(id){
+  const ctx = audioCtx(); if(!ctx) return toast('Este navegador no puede reproducir sonido');
+  stopProg(true);
+  Player.bus = ctx.createGain(); Player.bus.connect(Player.out);
+  Player.on = {id, bar:0, next:ctx.currentTime + .08, starts:[], cur:null};
+  Player.timer = setInterval(progTick, 25); progTick(); playUI();
+}
+function progTick(){
+  const P = Player.on; if(!P) return;
+  const A = accState(), pr = PROGRESSIONS.find(x => x.id === P.id);
+  while(P.next < Player.ctx.currentTime + .25){
+    const r = progressionIn(pr, {i:Music.mod(A.key.i + (A.off[pr.id] || 0)), minor:A.key.minor}), ix = P.bar % r.chords.length, beat = 60 / (A.bpm || 72);
+    for(const e of barEvents(r.voices[ix], A.pattern || 'bloque', beat)) synthNote(e.m, P.next + e.t, e.d, e.v);
+    P.starts.push([P.next, ix]); if(P.starts.length > 6) P.starts.shift();
+    P.next += 4 * beat; P.bar++;
+  }
+  progPaint();
+}
+function progPaint(){
+  const P = Player.on; if(!P) return;
+  let cur = null; for(const [t, ix] of P.starts) if(t <= Player.ctx.currentTime) cur = ix;
+  if(cur !== null && cur !== P.cur){ P.cur = cur; playUI(); if(!$('#modal').hidden && S.accPlay && S.accPlay.id === P.id){ S.accPlay.i = cur; renderAccPlay(); } }
+}
+function stopProg(quiet){
+  if(!Player.on) return;
+  clearInterval(Player.timer); Player.on = null;
+  const bus = Player.bus; bus.gain.setTargetAtTime(0, Player.ctx.currentTime, .05); setTimeout(() => bus.disconnect(), 400);
+  if(!quiet) playUI();
+}
+/* Botones ▶/■ y acorde iluminado, sin volver a pintar la pantalla */
+function playUI(){
+  const P = Player.on;
+  document.querySelectorAll('[data-act="accListen"]').forEach(b => { const on = P && P.id === b.dataset.id; b.textContent = on ? '■ Detener' : '▶ Escuchar'; b.classList.toggle('pri', !!on); });
+  document.querySelectorAll('.pc.on').forEach(x => x.classList.remove('on'));
+  if(P && P.cur !== null){ const c = $('#pr-' + P.id); const pc = c && c.querySelectorAll('.pc')[P.cur]; pc && pc.classList.add('on'); }
+}
 function renderAccPlay(){
   const P = S.accPlay, pr = PROGRESSIONS.find(x => x.id === P.id), A = accState();
   const k = {i:Music.mod(A.key.i + (A.off[pr.id] || 0)), minor:A.key.minor}, r = progressionIn(pr, k), i = P.i, v = r.voices[i];
@@ -1569,13 +1655,15 @@ function renderAccPlay(){
       ${pianoSVG(v.rh, v.lh, true)}
       <p class="small"><span class="dot rh"></span>Derecha: <b class="mono">${esc(noteNames(v.rh, k))}</b> · <span class="dot lh"></span>Izquierda: <b class="mono">${esc(Music.spellIn(v.lh % 12, k))}</b></p>
       <p class="small muted">Sigue: ${esc(r.chords[(i + 1) % r.chords.length])}</p>
-      <div class="row" style="justify-content:center"><button class="btn big" data-act="accStep" data-d="-1">◀ Anterior</button><button class="btn big pri" data-act="accStep" data-d="1">Siguiente ▶</button></div></div></div>`;
+      <div class="row" style="justify-content:center"><button class="btn big" data-act="accStep" data-d="-1">◀ Anterior</button><button class="btn big" data-act="accListen" data-id="${pr.id}">▶ Escuchar</button><button class="btn big" data-act="accStep" data-d="1">Siguiente ▶</button></div></div></div>`;
+  playUI();
   m.hidden = false;
 }
 
 /* ================= NAVEGACIÓN ================= */
 function render(){
   const {view, params} = S.route;
+  if(view !== 'acompanar') stopProg();
   $('#main').innerHTML = VIEWS[view](params);
   document.querySelectorAll('#nav [data-tab]').forEach(b => b.setAttribute('aria-current', b.dataset.tab === tabOf(view) ? 'page' : 'false'));
   AFTER[view] && AFTER[view](params);
@@ -1604,7 +1692,9 @@ const AFTER = {
     if(S.webScroll){ S.webScroll = false; setTimeout(() => $('#websearch') && $('#websearch').scrollIntoView({block:'start'}), 0); }
     $('#pasteform').addEventListener('submit', async e => { e.preventDefault(); const txt = $('#pt-text').value; if(!txt.trim()) return toast('Pega primero la letra y los acordes'); const s = songFromText(txt, {title:$('#pt-title').value.trim(), sourceName:'Texto pegado'}); await saveSong(s); startReview([s.id]); });
   },
-  acompanar(){ $('#acc-mom').addEventListener('change', e => { accState().moment = e.target.value; saveAcc(); render(); }); },
+  acompanar(){ $('#acc-mom').addEventListener('change', e => { accState().moment = e.target.value; saveAcc(); render(); });
+    const bpm = $('#acc-bpm'); bpm.addEventListener('input', () => { accState().bpm = +bpm.value; $('#acc-bpm-v').textContent = bpm.value; }); bpm.addEventListener('change', saveAcc);
+    playUI(); },
   conectar(){
     for(const slot of ['a','b']){
       const q = $('#cq-' + slot);
@@ -1917,7 +2007,9 @@ const ACT = {
   accStyle(b){ accState().style = b.dataset.v; saveAcc(); render(); },
   accShift(b){ const A = accState(), d = +b.dataset.d; A.off[b.dataset.id] = d === 0 ? 0 : Music.semiNorm((A.off[b.dataset.id] || 0) + d); const y = $('#pr-' + b.dataset.id).getBoundingClientRect().top; render(); const el = $('#pr-' + b.dataset.id); if(el) window.scrollBy(0, el.getBoundingClientRect().top - y); },
   accGo(b){ const A = accState(), pr = PROGRESSIONS.find(x => x.id === b.dataset.id); if(pr.level > A.level || (A.style && !pr.styles.includes(A.style))){ A.level = 3; A.style = ''; saveAcc(); render(); } const el = $('#pr-' + pr.id); el && el.scrollIntoView({block:'start'}); },
-  accPlay(b){ S.accPlay = {id:b.dataset.id, i:0}; renderAccPlay(); },
+  accPlay(b){ S.accPlay = {id:b.dataset.id, i:Player.on && Player.on.id === b.dataset.id && Player.on.cur !== null ? Player.on.cur : 0}; renderAccPlay(); },
+  accListen(b){ if(Player.on && Player.on.id === b.dataset.id) stopProg(); else playProg(b.dataset.id); },
+  accPattern(b){ accState().pattern = b.dataset.v; saveAcc(); document.querySelectorAll('[data-act="accPattern"]').forEach(x => x.setAttribute('aria-pressed', x.dataset.v === b.dataset.v)); },
   accStep(b){ const pr = PROGRESSIONS.find(x => x.id === S.accPlay.id), n = pr.chords.split(' ').length; S.accPlay.i = Music.mod(S.accPlay.i + (+b.dataset.d)) % n; renderAccPlay(); },
   webFrom(b){ S.webq = b.dataset.q; S.webScroll = true; S.stack = []; go('importar', {}, false); },
   connFrom(){ const s = songById(S.cur.id); S.conn = {a:{id:s.id, key: s.key ? {i:Music.mod(s.key.i + S.cur.semi), minor:s.key.minor} : null}, b:null}; go('conectar'); },

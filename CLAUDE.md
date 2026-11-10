@@ -34,7 +34,7 @@ Están hechas las fases 1 a 5 del plan de `docs/PROMPT_ORIGINAL.md`, todas funci
   - La dueña pidió que se llame **Improvisación**, no "Prédica y ministración". Reemplazó a la pestaña "Buscar" (la búsqueda sigue en Inicio).
   - Se elige momento (prédica, oración, clamor…), tonalidad (12 tonos, mayor o menor), nivel y estilo. El momento da ideas de cómo tocar y ordena las progresiones; nunca se etiqueta una progresión como "la correcta" para un momento espiritual.
   - Biblioteca `PROGRESSIONS` (escritas en C o Am, se transportan con `progressionIn`): acordes, grados en romanos (`romanOf`), tecladito por acorde con mano derecha (azul) y bajo (violeta), inversiones cercanas (`voiceLead`), variaciones, alternativas que comparten acordes, ±½ por progresión y "Ver en grande" (paso a paso).
-  - Pendiente según la especificación: escuchar ejemplos (MIDI) y cambiar el tempo.
+  - **Escuchar** (`Player`, Web Audio): piano sencillo generado en el momento, sin internet ni archivos de sonido. Suena en bucle, ilumina el acorde que suena y avanza la vista en grande. Patrones `PATTERNS`/`barEvents` (acordes largos, arpegio, rítmico) y tempo 50–130. Se detiene al salir de la sección. En iPhone antiguos el interruptor de silencio puede apagarlo (`navigator.audioSession` lo evita donde existe).
 - **Notas de interpretación y secciones**
   - Frases como "Se repite", "x2", "(Todos)" son *notas*: renglón aparte, en rojo y cursiva (color rojo/azul/gris y cursiva se cambian en Ajustes), alineadas a la izquierda, al centro o a la derecha.
   - Se detectan solas al importar (`isNoteText`). En el editor hay botones para marcar la línea del cursor como nota (izquierda, centro, derecha), quitarla, o buscar frases de repetición. "(x2)", "(bis)" dentro de un renglón de letra se pintan igual sin moverlo.
@@ -88,7 +88,7 @@ Song = { id, title, artist, key:{i:0-11, minor:bool}|null,
   createdAt, updatedAt, lastOpened, isExample?, meta:{notes:[]} }
 SourceFile = { id, name, ext, size, blob, addedAt, status }
 Setlist = { id, name, date:'YYYY-MM-DD', type, items:[{songId, key, notes, link, transition?:{text, name, from, to}}], isExample? }
-Prefs = { id:'prefs', spell:'auto'|'sharp'|'flat', liveSize, livePalette:'dark'|'light', perPage, seeded, lastBackup?, noteColor:'red'|'blue'|'gray', noteItalic, acc?:{key, moment, level, style} }
+Prefs = { id:'prefs', spell:'auto'|'sharp'|'flat', liveSize, livePalette:'dark'|'light', perPage, seeded, lastBackup?, noteColor:'red'|'blue'|'gray', noteItalic, acc?:{key, moment, level, style, pattern, bpm} }
 Backup = { app:'120 Worship' (también se aceptan copias con '120 Music'), version:1, exportedAt, songs:[Song], setlists:[Setlist], files:[{...SourceFile sin blob, type, data:base64}] }
 ```
 
@@ -135,7 +135,7 @@ Se probó con un PDF real de la usuaria, "Suelto" de Sarai Rivera. El archivo no
 
 ## Próximos pasos sugeridos
 
-1. **Escuchar las progresiones** (Web Audio, sin internet) y cambiar el tempo, como pide la especificación para una fase posterior.
+1. **Fase 6:** compartir listas, pedal Bluetooth, sincronización.
 2. **OCR (en pausa, la dueña no lo quiere por ahora):** tesseract.js con los archivos dentro del repositorio.
 3. **Librerías locales (opcional):** copiar pdf.js y mammoth a `vendor/` para no depender de cdnjs.
 
