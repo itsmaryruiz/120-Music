@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path');
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const eng = html.slice(html.indexOf('/*ENGINE-START*/'), html.indexOf('/*ENGINE-END*/'));
-eval(eng + ';globalThis.E={Music,parseSongText,songToText,itemsToText,searchIndex,buildIndex,checkBackup,planRestore,isNoteText}');
+eval(eng + ';globalThis.E={Music,parseSongText,songToText,itemsToText,searchIndex,buildIndex,checkBackup,planRestore,isNoteText,matchKey}');
 const {Music} = E; let fail = 0;
 const eq = (a, b, m) => { if (JSON.stringify(a) !== JSON.stringify(b)) { fail++; console.log('FALLA', m, JSON.stringify(a), '≠', JSON.stringify(b)); } else console.log('ok  ', m); };
 const T = (c, s, k) => Music.transposeSym(c, s, Music.flatsFor(k, s, 'auto'), false);
@@ -23,6 +23,13 @@ const song = {id:'x', title:p.meta.title, artist:p.meta.artist, key:p.meta.key, 
 const ix = new Map([['x', E.buildIndex(song)]]);
 const r = E.searchIndex([song], ix, 'segunda linea del berso');
 eq(r.length ? ix.get('x').lines[r[0].hits[0].k].raw : null, 'segunda línea del verso', 'búsqueda tolera acentos y errores');
+/* Abrir otra canción en el tono que se está tocando */
+const C = {i:0, minor:false};
+eq(E.matchKey({i:2, minor:false}, C), {i:0, minor:false, relative:false}, 'canción en D se abre en C si estoy en C');
+eq(Music.semiBetween({i:2, minor:false}, E.matchKey({i:2, minor:false}, C)), -2, 'D → C es bajar un tono');
+eq(E.matchKey({i:4, minor:true}, C), {i:9, minor:true, relative:true}, 'canción menor (Em) estando en C se abre en Am, la relativa');
+eq(E.matchKey({i:7, minor:false}, {i:9, minor:true}), {i:0, minor:false, relative:true}, 'canción mayor estando en Am se abre en C, la relativa');
+eq(E.matchKey(null, C), null, 'sin tonalidad confirmada no se adivina');
 /* Notas de interpretación */
 const nt = `[Coro]\nG       D\nfrase de prueba\nSe repite\n(x2)\n(Todos)\n{nota-derecha: Una vez más}\n{c: Suave}\n(Aleluya)`;
 const pn = E.parseSongText(nt, {});

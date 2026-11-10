@@ -21,6 +21,7 @@ Están hechas las fases 1, 2 y 3 del plan de `docs/PROMPT_ORIGINAL.md`, todas fu
   - Listas de servicio con tono propio por canción, notas, enlace con la siguiente y opción de duplicar.
   - Modo en vivo con pantalla oscura, botones grandes, bloqueo contra toques accidentales, búsqueda rápida y navegación por la lista.
   - Al transportar se conserva la posición de lectura y la pantalla no se apaga.
+  - **Buscar en vivo en el mismo tono:** cada resultado de la búsqueda tiene un botón "En C" (el tono que suena) además de "Original". Si una canción es mayor y la otra menor, usa la relativa (C ↔ Am), marcada "relativa". Lógica en `matchKey` (motor). "Volver" regresa a la canción anterior con su tono.
 - **Notas de interpretación y secciones**
   - Frases como "Se repite", "x2", "(Todos)" son *notas*: renglón aparte, en rojo y cursiva (color rojo/azul/gris y cursiva se cambian en Ajustes), alineadas a la izquierda, al centro o a la derecha.
   - Se detectan solas al importar (`isNoteText`). En el editor hay botones para marcar la línea del cursor como nota (izquierda, centro, derecha), quitarla, o buscar frases de repetición. "(x2)", "(bis)" dentro de un renglón de letra se pintan igual sin moverlo.

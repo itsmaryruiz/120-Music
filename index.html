@@ -234,6 +234,16 @@ pre.sheet .c.bad{color:var(--warn);text-decoration:underline dotted;text-underli
 .lv-bar .grp{display:flex;gap:6px}
 .lv-panel{border-bottom:1px solid var(--line);background:var(--surface);padding:10px 12px;display:flex;flex-direction:column;gap:8px;max-height:60%;overflow:auto}
 .lv-panel .keygrid .chip{min-height:46px;font-size:16px}
+.lv-hint{font-size:14px;color:var(--muted)}
+.lv-hint b{color:var(--chord)}
+.lv-hit{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;padding:10px 2px;border-top:1px solid var(--line)}
+.lv-hit-t{flex:1 1 160px;min-width:0;display:flex;flex-direction:column}
+.lv-hit-t b{font-size:17px}
+.lv-hit-t span{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lv-hit-b{display:flex;gap:6px;flex:none}
+.lv-hit-b button{min-height:48px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);font-weight:700;font-size:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1}
+.lv-hit-b button.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.lv-hit-b small{font-size:10.5px;font-weight:600;opacity:.85}
 .live.locked .lv-bar button:not(#lvLockB), .live.locked .lv-top button:not(#lvLock){opacity:.35;pointer-events:none}
 #lvLock[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:80;background:var(--sel);color:var(--sel-ink);padding:10px 16px;border-radius:10px;font-weight:600;font-size:14px;max-width:calc(100% - 32px)}
@@ -363,6 +373,13 @@ const Music = (() => {
   const semiBetween = (from, to) => semiNorm(to.i - from.i);
   return {parse, triad, spell, keyFlats, flatsFor, transposeSym, keyName, parseKey, estimateKey, semiNorm, semiLabel, semiBetween, mod};
 })();
+
+/* Tono para encadenar canciones: el mismo tono que se está tocando; si una es mayor y la otra menor, su relativa (mismas notas: C ↔ Am) */
+function matchKey(songKey, target){
+  if(!songKey || !target) return null;
+  if(songKey.minor === target.minor) return {i:target.i, minor:target.minor, relative:false};
+  return {i:Music.mod(target.i + (songKey.minor ? 9 : 3)), minor:songKey.minor, relative:true};
+}
 
 /* ================= PARSER DE DOCUMENTOS (texto → canción estructurada) ================= */
 const SECTION_MAP = [
@@ -1349,7 +1366,7 @@ function renderLive(keep){
       <button id="lvLock" aria-pressed="${v.locked}" title="${v.locked?'Mantén pulsado para desbloquear':'Bloquear controles'}">${v.locked?'Mantener':'Bloquear'}</button>
     </div>
     ${v.panel==='key' ? `<div class="lv-panel">${s.key ? keyGrid(curKey.i, s.key.minor, 'liveKey', s.key.i) : '<p>Confirma la tonalidad original para elegir por nombre. Usa −½ y +½.</p>'}</div>` : ''}
-    ${v.panel==='search' ? `<div class="lv-panel"><input class="inp" id="lvq" type="search" placeholder="Frase, título o acorde" autocomplete="off" style="font-size:18px"><div id="lvres"></div></div>` : ''}
+    ${v.panel==='search' ? `<div class="lv-panel">${curKey ? `<p class="lv-hint">Estás en <b>${esc(Music.keyName(curKey,S.prefs.spell))}</b>. Toca <b>En ${esc(Music.keyName(curKey,S.prefs.spell))}</b> para abrir la otra canción en tu mismo tono.</p>` : ''}<input class="inp" id="lvq" type="search" placeholder="Frase, título o acorde" autocomplete="off" style="font-size:18px"><div id="lvres"></div></div>` : ''}
     <div class="lv-sheet" id="lvSheet" style="--live-size:${S.prefs.liveSize}px">${sheetHTML(s, v.semi, S.prefs.spell)}${item&&item.notes?`<div class="lv-next">Nota: ${esc(item.notes)}</div>`:''}${nextInfo}</div>
     <div class="lv-bar">
       <div class="grp"><button data-act="liveStep" data-d="-1" aria-label="Bajar medio tono">−½</button><button data-act="liveStep" data-d="1" aria-label="Subir medio tono">+½</button><button data-act="livePanel" data-v="key">Tono</button></div>
@@ -1362,7 +1379,18 @@ function renderLive(keep){
   ['pointerup','pointerleave','pointercancel'].forEach(ev => lock.addEventListener(ev, () => clearTimeout(tmr)));
   lock.addEventListener('click', () => { if(!S.live.locked){ S.live.locked = true; S.live.panel = null; renderLive(true); toast('Bloqueado: mantén pulsado para desbloquear'); } });
   const q = $('#lvq');
-  if(q){ q.focus(); q.addEventListener('input', () => { const r = q.value.trim() ? searchIndex(S.songs, S.index, q.value).slice(0,8) : []; $('#lvres').innerHTML = r.map(x=>`<button class="item" data-act="liveOpen" data-id="${x.song.id}"><span class="t">${esc(x.song.title)}</span><span class="r">${keyBadge(x.song.key)}</span><span class="s">${esc(x.hits[0]?S.index.get(x.song.id).lines[x.hits[0].k].raw:x.song.artist||'')}</span></button>`).join(''); }); }
+  if(q){ q.focus(); q.addEventListener('input', () => {
+    const r = q.value.trim() ? searchIndex(S.songs, S.index, q.value).filter(x => x.song.id !== v.songId).slice(0,8) : [];
+    const kn = k => esc(Music.keyName(k, S.prefs.spell));
+    $('#lvres').innerHTML = r.map(x => {
+      const t = x.song, m = matchKey(t.key, curKey), semi = m ? Music.semiBetween(t.key, m) : 0;
+      const snip = x.hits[0] ? S.index.get(t.id).lines[x.hits[0].k].raw : (t.artist || '');
+      const btns = !m ? `<button data-act="liveOpen" data-id="${t.id}" data-semi="0">${t.key ? 'Abrir en ' + kn(t.key) : 'Abrir'}</button>`
+        : semi === 0 ? `<button class="pri" data-act="liveOpen" data-id="${t.id}" data-semi="0">En ${kn(m)}${m.relative ? '<small>relativa</small>' : ''}</button>`
+        : `<button class="pri" data-act="liveOpen" data-id="${t.id}" data-semi="${semi}">En ${kn(m)}${m.relative ? '<small>relativa</small>' : ''}</button><button data-act="liveOpen" data-id="${t.id}" data-semi="0">Original ${kn(t.key)}</button>`;
+      return `<div class="lv-hit"><div class="lv-hit-t"><b>${esc(t.title)}</b><span>${esc(snip)}</span></div><div class="lv-hit-b">${btns}</div></div>`;
+    }).join('') || (q.value.trim() ? '<p class="muted small">Sin coincidencias.</p>' : '');
+  }); }
 }
 function closeLive(){ const L = $('#live'); L.hidden = true; L.innerHTML = ''; document.body.style.overflow = ''; try{ S.live && S.live.wake && S.live.wake.release(); }catch(e){} S.live = null; if(S.route.view==='cancion' || S.route.view==='inicio' || S.route.view==='servicio') render(); }
 
@@ -1437,7 +1465,7 @@ const ACT = {
   liveKey(b){ const s = songById(S.live.songId); S.live.semi = Music.semiBetween(s.key, {i:+b.dataset.i}); S.live.panel = null; renderLive(true); },
   livePanel(b){ S.live.panel = S.live.panel === b.dataset.v ? null : b.dataset.v; renderLive(true); },
   liveSize(b){ S.prefs.liveSize = Math.min(40, Math.max(14, S.prefs.liveSize + (+b.dataset.d))); savePrefs(); renderLive(true); },
-  liveOpen(b){ const v = S.live; v.history.push({songId:v.songId, semi:v.semi, ix:v.ix, setlistId:v.setlistId}); v.songId = b.dataset.id; v.semi = 0; v.panel = null; v.ix = null; v.setlistId = null; const s = songById(b.dataset.id); s.lastOpened = Date.now(); dbPut('songs', s); renderLive(); },
+  liveOpen(b){ const v = S.live; v.history.push({songId:v.songId, semi:v.semi, ix:v.ix, setlistId:v.setlistId}); v.songId = b.dataset.id; v.semi = Music.semiNorm(+(b.dataset.semi || 0)); v.panel = null; v.ix = null; v.setlistId = null; const s = songById(b.dataset.id); s.lastOpened = Date.now(); dbPut('songs', s); renderLive(); },
   liveBack(){ const v = S.live; const h = v.history.pop(); if(!h) return; Object.assign(v, h, {panel:null}); renderLive(); },
   liveNav(b){ const v = S.live; const sl = S.setlists.find(x=>x.id===v.setlistId); const ix = v.ix + (+b.dataset.d); if(ix<0||ix>=sl.items.length) return; Object.assign(v, liveFromSet(sl, ix), {panel:null}); renderLive(); },
   async liveSave(){ const v = S.live; const sl = S.setlists.find(x=>x.id===v.setlistId); const s = songById(v.songId); sl.items[v.ix].key = {i:Music.mod(s.key.i+v.semi), minor:s.key.minor}; await saveSetlist(sl); renderLive(true); toast(`Tono guardado en “${sl.name}”`); }
