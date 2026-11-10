@@ -90,6 +90,8 @@ Backup = { app:'120 Music', version:1, exportedAt, songs:[Song], setlists:[Setli
 ## Decisiones tomadas
 
 - **Nombre: 120 Music.** Aparece en `<title>`, `const APP_NAME`, la marca de la barra lateral (`.brand`), `apple-mobile-web-app-title` y `manifest.webmanifest`. La base de IndexedDB se sigue llamando `app-alabanza` a propósito: cambiarla haría que los teléfonos pierdan las canciones guardadas.
+- **Publicada en GitHub Pages:** https://itsmaryruiz.github.io/120-Music/ (repositorio público `itsmaryruiz/120-Music`, rama `main`, carpeta raíz).
+  - **Cómo se publica una actualización:** Claude hace el commit en esta carpeta y la dueña toca **Push origin** en GitHub Desktop (ella maneja la sesión de GitHub; no hay `gh` instalado). Antes de cada publicación hay que subir `VERSION` en `sw.js`.
 - **App web en vez de Flutter.** La versión actual es una PWA que se publica en **GitHub Pages** y se agrega a la pantalla de inicio del iPhone (Compartir → Agregar a pantalla de inicio). El motor está separado para poder portarlo a Flutter + SQLite si algún día se quiere una app de tienda.
 - **Datos locales por dispositivo.** En iPhone, la app instalada en la pantalla de inicio y Safari tienen almacenamiento **separado**. Hay que usar siempre la app instalada.
 - **Sin conexión.** `sw.js` guarda en caché la app, las librerías de cdnjs y las fuentes. **Cada vez que se publique un cambio en index.html, hay que subir el valor de `VERSION` en sw.js** (por ejemplo alabanza-v2 → alabanza-v3) para que los teléfonos reciban la versión nueva.
@@ -113,11 +115,10 @@ Se probó con un PDF real de la usuaria, "Suelto" de Sarai Rivera. El archivo no
 
 ## Próximos pasos sugeridos
 
-1. **Publicar en GitHub Pages:** repositorio público → Settings → Pages → rama `main`, carpeta raíz.
-2. **Fase 4:** conexión de canciones y asistente de transiciones. El motor ya tiene `edgeChords` y `semiBetween`.
-3. **Fase 5:** acompañamiento para prédicas, con progresiones transportables y guía de mano izquierda y mano derecha.
-4. **OCR:** tesseract.js con los archivos dentro del repositorio.
-5. **Librerías locales (opcional):** copiar pdf.js y mammoth a `vendor/` para no depender de cdnjs.
+1. **Fase 4:** conexión de canciones y asistente de transiciones. El motor ya tiene `edgeChords` y `semiBetween`.
+2. **Fase 5:** acompañamiento para prédicas, con progresiones transportables y guía de mano izquierda y mano derecha.
+3. **OCR:** tesseract.js con los archivos dentro del repositorio.
+4. **Librerías locales (opcional):** copiar pdf.js y mammoth a `vendor/` para no depender de cdnjs.
 
 ## Cómo trabajar en este proyecto
 
