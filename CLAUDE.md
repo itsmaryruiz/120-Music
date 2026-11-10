@@ -6,7 +6,7 @@ La especificación completa que escribió la dueña del proyecto está en `docs/
 
 ## Estado actual
 
-Están hechas las fases 1, 2 y 3 del plan de `docs/PROMPT_ORIGINAL.md`, todas funcionales:
+Están hechas las fases 1, 2, 3 y 4 del plan de `docs/PROMPT_ORIGINAL.md`, todas funcionales:
 
 - **Fase 1 · Biblioteca e importación**
   - Importa PDF digital, Word .docx y texto o ChordPro.
@@ -24,6 +24,11 @@ Están hechas las fases 1, 2 y 3 del plan de `docs/PROMPT_ORIGINAL.md`, todas fu
   - Modo en vivo con pantalla oscura, botones grandes, bloqueo contra toques accidentales, búsqueda rápida y navegación por la lista.
   - Al transportar se conserva la posición de lectura y la pantalla no se apaga.
   - **Buscar en vivo en el mismo tono:** cada resultado de la búsqueda tiene un botón "En C" (el tono que suena) además de "Original". Si una canción es mayor y la otra menor, usa la relativa (C ↔ Am), marcada "relativa". Lógica en `matchKey` (motor). "Volver" regresa a la canción anterior con su tono.
+- **Fase 4 · Conexión de canciones**
+  - **Asistente de transiciones** (vista `conectar`, estado `S.conn`): eliges canción actual y siguiente con su tono; muestra cómo sale una y entra la otra y varias opciones (directo, dominante V7, subida de tono, ii–V, suspensión, acorde puente), cada una con acordes, nivel y explicación. Si faltan acordes o la tonalidad es estimada, avisa que es provisional. Sugiere "¿mismo tono?" con la relativa. Sin canción siguiente, lista las que mejor conectan (`rankByKey`).
+  - Entradas: botón en Servicios, en Inicio, "Conectar con otra" en cada canción y "Sugerir transición" entre canciones de una lista.
+  - **En Servicios:** "Tono común" pone todas en un tono (menores en la relativa). Cada canción muestra la progresión del coro y sus secciones. Entre canciones: cómo sale y entra, la relación de tonos y la transición guardada (editable; avisa si luego cambió un tono). La transición se ve en el modo en vivo antes de la siguiente.
+  - Motor: `keyRelation`, `transitionOptions`, `rankByKey`, `diatonic` (sección CONEXIÓN DE CANCIONES).
 - **Notas de interpretación y secciones**
   - Frases como "Se repite", "x2", "(Todos)" son *notas*: renglón aparte, en rojo y cursiva (color rojo/azul/gris y cursiva se cambian en Ajustes), alineadas a la izquierda, al centro o a la derecha.
   - Se detectan solas al importar (`isNoteText`). En el editor hay botones para marcar la línea del cursor como nota (izquierda, centro, derecha), quitarla, o buscar frases de repetición. "(x2)", "(bis)" dentro de un renglón de letra se pintan igual sin moverlo.
@@ -36,10 +41,9 @@ Están hechas las fases 1, 2 y 3 del plan de `docs/PROMPT_ORIGINAL.md`, todas fu
   - Ajustes avisa si nunca se hizo copia o si hay cambios después de la última.
 
 **Pendiente**
-- **Fase 4:** conexión manual de canciones y asistente de transiciones.
 - **Fase 5:** acompañamiento para prédicas y biblioteca de progresiones.
 - **Fase 6:** sincronización, colaboración en equipo, voz, pedal Bluetooth y audio.
-- **OCR** para PDF escaneados.
+- **OCR** para PDF escaneados: la dueña **no lo quiere por ahora** (solo PDF digitales). Si algún día se hace, que sea gratis y local (tesseract.js).
 
 ## Archivos
 
@@ -78,7 +82,7 @@ Song = { id, title, artist, key:{i:0-11, minor:bool}|null,
   tags:[], favorite, status:'revisar'|'ok'|'sin-texto', sourceFileId, sourceName, sourcePage?,
   createdAt, updatedAt, lastOpened, isExample?, meta:{notes:[]} }
 SourceFile = { id, name, ext, size, blob, addedAt, status }
-Setlist = { id, name, date:'YYYY-MM-DD', type, items:[{songId, key, notes, link}], isExample? }
+Setlist = { id, name, date:'YYYY-MM-DD', type, items:[{songId, key, notes, link, transition?:{text, name, from, to}}], isExample? }
 Prefs = { id:'prefs', spell:'auto'|'sharp'|'flat', liveSize, livePalette:'dark'|'light', perPage, seeded, lastBackup?, noteColor:'red'|'blue'|'gray', noteItalic }
 Backup = { app:'120 Worship' (también se aceptan copias con '120 Music'), version:1, exportedAt, songs:[Song], setlists:[Setlist], files:[{...SourceFile sin blob, type, data:base64}] }
 ```
@@ -126,10 +130,9 @@ Se probó con un PDF real de la usuaria, "Suelto" de Sarai Rivera. El archivo no
 
 ## Próximos pasos sugeridos
 
-1. **Fase 4:** conexión de canciones y asistente de transiciones. El motor ya tiene `edgeChords` y `semiBetween`.
-2. **Fase 5:** acompañamiento para prédicas, con progresiones transportables y guía de mano izquierda y mano derecha.
-3. **OCR:** tesseract.js con los archivos dentro del repositorio.
-4. **Librerías locales (opcional):** copiar pdf.js y mammoth a `vendor/` para no depender de cdnjs.
+1. **Fase 5:** acompañamiento para prédicas, con progresiones transportables y guía de mano izquierda y mano derecha.
+2. **OCR (en pausa, la dueña no lo quiere por ahora):** tesseract.js con los archivos dentro del repositorio.
+3. **Librerías locales (opcional):** copiar pdf.js y mammoth a `vendor/` para no depender de cdnjs.
 
 ## Cómo trabajar en este proyecto
 

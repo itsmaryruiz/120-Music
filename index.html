@@ -189,6 +189,20 @@ pre.sheet .c.bad{color:var(--warn);text-decoration:underline dotted;text-underli
 
 .cols{display:grid;grid-template-columns:1fr;gap:16px}
 .notebar{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}
+@media (min-width:720px){.cols.two{grid-template-columns:1fr 1fr}}
+.conn-hit{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--line)}
+.conn-hit:first-child{border-top:0}
+.trans header{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.path{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.path .ch{font-family:var(--f-mono);font-weight:700;font-size:16px;padding:6px 12px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);color:var(--chord);text-align:center;line-height:1.15}
+.path .ch small{display:block;font-family:var(--f-body);font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.path .ch.mid{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.path .arr{color:var(--muted);font-weight:700}
+.mono{font-family:var(--f-mono)}
+.conn-gap{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;border:1px dashed var(--line);border-radius:10px}
+.trans-inp{font-family:var(--f-mono);width:auto;flex:1;min-width:140px}
+.lv-trans{margin-top:20px;padding:12px;border-radius:10px;background:var(--accent-soft);color:var(--ink);font-size:15px}
+.lv-trans b{color:var(--chord);font-family:var(--f-mono)}
 .notebar .seg button{font-size:13px;min-height:32px;padding:5px 10px}
 @media (min-width:900px){.cols{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
@@ -406,6 +420,59 @@ function matchKey(songKey, target){
   if(!songKey || !target) return null;
   if(songKey.minor === target.minor) return {i:target.i, minor:target.minor, relative:false};
   return {i:Music.mod(target.i + (songKey.minor ? 9 : 3)), minor:songKey.minor, relative:true};
+}
+
+/* ================= CONEXIÓN DE CANCIONES (fase 4) ================= */
+/* Acordes de cada grado (tríadas) en mayor y en menor natural */
+const DIA_MAJ = [[0,''],[2,'m'],[4,'m'],[5,''],[7,''],[9,'m'],[11,'dim']];
+const DIA_MIN = [[0,'m'],[2,'dim'],[3,''],[5,'m'],[7,'m'],[8,''],[10,'']];
+const diatonic = key => (key.minor ? DIA_MIN : DIA_MAJ).map(([d, q]) => ({pc:Music.mod(key.i + d), q}));
+const chordIn = (pc, q, key) => Music.spellIn(pc, key) + q;
+/* Distancia entre tonalidades en el círculo de quintas (una menor cuenta como su relativa mayor) */
+const fifthsPos = k => Music.mod((k.minor ? k.i + 3 : k.i) * 7);
+function keyDistance(a, b){ const d = Music.mod(fifthsPos(a) - fifthsPos(b)); return Math.min(d, 12 - d); }
+function keyRelation(a, b){
+  if(a.i === b.i && a.minor === b.minor) return {dist:0, label:'Mismo tono'};
+  const d = keyDistance(a, b);
+  if(d === 0) return {dist:0, label:'Relativa'};
+  if(d === 1) return {dist:1, label:'Tono vecino'};
+  if(d === 2) return {dist:2, label:'Tono cercano'};
+  return {dist:d, label:'Tono lejano'};
+}
+/* Formas de pasar de una canción (tonalidad `from`) a otra (tonalidad `to`).
+   Cada opción: {id, name, chords (acordes intermedios), level, why}. No toca las canciones. */
+function transitionOptions(from, to){
+  const kn = k => Music.keyName(k, 'auto'), A = kn(from), B = kn(to), opts = [];
+  const rel = keyRelation(from, to), V = Music.mod(to.i + 7);
+  const v7 = chordIn(V, '7', to), vsus = chordIn(V, 'sus4', to), vv = chordIn(V, '', to);
+  const ii = chordIn(Music.mod(to.i + 2), to.minor ? 'm7b5' : 'm7', to);
+  const up = from.minor === to.minor ? Music.semiNorm(to.i - from.i) : 0;
+  if(rel.dist === 0) opts.push({id:'directo', name:'Directo', chords:[], level:'fácil',
+    why: rel.label === 'Mismo tono' ? `Las dos están en ${B}: termina una y entra la otra sin acordes extra.` : `${A} y ${B} son relativas: usan las mismas notas, así que puedes pasar directo.`});
+  else if(rel.dist === 1) opts.push({id:'directo', name:'Directo (tonos vecinos)', chords:[], level:'media',
+    why:`${B} está a un paso de ${A} en el círculo de quintas: comparten casi todos los acordes, por eso el cambio suena natural aun sin preparación.`});
+  if(up === 1 || up === 2) opts.push({id:'subida', name:`Subida de ${up === 1 ? 'medio tono' : 'un tono'}`, chords:[v7], level:'fácil',
+    why:`Subir ${up === 1 ? 'medio tono' : 'un tono'} es típico para el último coro. ${v7} es el acorde que prepara ${B}: tócalo un compás y entra.`});
+  else if(rel.label !== 'Mismo tono') opts.push({id:'v7', name:'Dominante (V7)', chords:[v7], level:'fácil',
+    why:`${v7} es el acorde que “llama” a ${B} (su V7): crea tensión y se resuelve justo cuando entra la nueva canción.`});
+  if(rel.label !== 'Mismo tono') opts.push({id:'iiv', name:'ii – V', chords:[ii, v7], level:'media',
+    why:`${ii} → ${v7} es la preparación más usada para llegar a un tono nuevo: dos pasos suaves en vez de un salto.`});
+  opts.push({id:'sus', name:'Suspensión', chords:[vsus, vv], level:'fácil',
+    why:`${vsus} deja la música “en el aire” y ${vv} la resuelve hacia ${B}: da un respiro antes de la nueva canción. Muy usado en adoración.`});
+  if(rel.dist > 0){
+    const inA = diatonic(from), cands = diatonic(to).filter(c => c.q !== 'dim' && c.pc !== to.i && c.pc !== from.i && inA.some(a => a.pc === c.pc && a.q === c.q));
+    const pref = [5, 2, 9, 4, 3, 8].map(d => Music.mod(to.i + d));
+    cands.sort((x, y) => pref.indexOf(x.pc) - pref.indexOf(y.pc));
+    if(cands[0]){ const pv = chordIn(cands[0].pc, cands[0].q, to);
+      opts.push({id:'pivote', name:'Acorde puente', chords:[pv, v7], level:'media',
+        why:`${pv} pertenece a los dos tonos (${A} y ${B}). Úsalo de puente y luego ${v7} para entrar.`}); }
+  }
+  return opts;
+}
+/* Canciones que conectan con una tonalidad: primero las del mismo tono o relativas, luego vecinas */
+function rankByKey(target, songs){
+  return songs.filter(s => s.key).map(s => ({song:s, rel:keyRelation(target, s.key), fit:matchKey(s.key, target)}))
+    .sort((a, b) => a.rel.dist - b.rel.dist || (a.song.title || '').localeCompare(b.song.title || ''));
 }
 
 /* ================= PARSER DE DOCUMENTOS (texto → canción estructurada) ================= */
@@ -906,8 +973,9 @@ VIEWS.inicio = () => {
   <section class="sect"><header><h2>Recientes</h2></header>
     ${recent.length ? `<div class="list">${recent.map(s=>songRow(s)).join('')}</div>` : `<div class="empty">Las canciones que abras aparecerán aquí.</div>`}
   </section>
-  <section class="sect"><header><h2>Próximas fases</h2></header>
-    <p class="muted small">La conexión de canciones, el asistente de transiciones y el acompañamiento para prédicas se construyen en las fases 4 y 5, sobre este mismo motor musical. Ver <button class="linkbtn" data-tab="ajustes">plan completo</button>.</p>
+  <section class="card"><h3>Conectar canciones</h3>
+    <p class="muted small">Elige dos canciones y la app te sugiere cómo pasar de una a otra, con los acordes de en medio.</p>
+    <div><button class="btn" data-act="connNew">Abrir asistente de transiciones</button></div>
   </section>`;
 };
 function fmtDate(d){ try{ return new Date(d+'T12:00').toLocaleDateString('es',{weekday:'short', day:'numeric', month:'short'}); }catch(e){ return d; } }
@@ -995,7 +1063,7 @@ VIEWS.cancion = (p) => {
   const sls = [...S.setlists].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   return `
   <header class="ph"><div><button class="linkbtn" data-act="back">← Volver</button><h1>${esc(s.title||'Sin título')}</h1><p class="muted">${esc(s.artist||'Artista sin indicar')} ${statusBadge(s)} ${(s.tags||[]).map(t=>`<span class="badge">${esc(t)}</span>`).join(' ')}</p></div>
-    <div class="row"><button class="star" data-act="fav" data-id="${s.id}" aria-pressed="${!!s.favorite}" aria-label="Favorita">${s.favorite?'★':'☆'}</button><button class="btn" data-act="edit" data-id="${s.id}">Editar</button>${s.sourceFileId?`<button class="btn" data-act="original" data-id="${s.sourceFileId}">Ver original</button>`:''}<button class="btn pri" data-act="liveCur">Modo en vivo</button></div></header>
+    <div class="row"><button class="star" data-act="fav" data-id="${s.id}" aria-pressed="${!!s.favorite}" aria-label="Favorita">${s.favorite?'★':'☆'}</button><button class="btn" data-act="edit" data-id="${s.id}">Editar</button>${s.sourceFileId?`<button class="btn" data-act="original" data-id="${s.sourceFileId}">Ver original</button>`:''}<button class="btn" data-act="connFrom">Conectar con otra</button><button class="btn pri" data-act="liveCur">Modo en vivo</button></div></header>
   <section class="keybar" id="keybar">${keybarHTML(s)}</section>
   ${unk.length ? `<div class="callout"><p>${unk.length} ${unk.length===1?'símbolo no se reconoce':'símbolos no se reconocen'} como acorde (${unk.slice(0,6).map(esc).join(', ')}). Se muestran en rojo y no se transportan.</p><button class="btn sm" data-act="edit" data-id="${s.id}">Corregir</button></div>` : ''}
   ${s.meta && s.meta.notes && s.meta.notes.length ? `<p class="muted small">${s.meta.notes.map(esc).join(' · ')}</p>`:''}
@@ -1028,7 +1096,7 @@ function keybarHTML(s){
 }
 
 VIEWS.servicios = () => `
-  <header class="ph"><div><p class="eyebrow">Servicios</p><h1>Listas para cada culto</h1></div></header>
+  <header class="ph"><div><p class="eyebrow">Servicios</p><h1>Listas para cada culto</h1></div><button class="btn" data-act="connNew">Asistente de transiciones</button></header>
   <form class="card" id="newset">
     <h3>Nueva lista</h3>
     <div class="grid2">
@@ -1045,6 +1113,8 @@ VIEWS.servicio = (p) => {
   return `
   <header class="ph"><div><button class="linkbtn" data-act="back">← Volver</button><p class="eyebrow">${esc(sl.type)}${sl.date?' · '+esc(fmtDate(sl.date)):''}</p><h1>${esc(sl.name)}</h1></div>
     <div class="row"><button class="btn" data-act="dupSet" data-id="${sl.id}">Duplicar lista</button><button class="btn pri" data-act="liveSet" data-id="${sl.id}" ${sl.items.length?'':'disabled'}>Abrir en vivo</button></div></header>
+  ${sl.items.length > 1 ? `<section class="card"><h3>Tono común</h3><p class="muted small">Pone todas las canciones en el mismo tono para conectarlas sin modular. Las canciones menores van a su relativa (en C, quedan en Am).</p>
+    <div class="row"><select class="inp" id="commonKey" style="width:auto">${ROOTS.map(i => `<option value="${i}">${esc(kname({i, minor:false}))}</option>`).join('')}</select><button class="btn" data-act="commonKey">Poner todas en este tono</button></div></section>` : ''}
   <div class="list">${sl.items.length ? sl.items.map((it,ix) => setItemHTML(sl,it,ix)).join('') : `<div class="empty" style="border:0">Añade canciones desde abajo.</div>`}</div>
   <section class="card">
     <h3>Añadir canción</h3>
@@ -1063,12 +1133,23 @@ function setItemHTML(sl, it, ix){
       <div class="row"><button class="btn sm" data-act="mvItem" data-ix="${ix}" data-d="-1" ${ix?'':'disabled'} aria-label="Subir">↑</button><button class="btn sm" data-act="mvItem" data-ix="${ix}" data-d="1" ${ix<sl.items.length-1?'':'disabled'} aria-label="Bajar">↓</button><button class="btn sm" data-act="rmItem" data-ix="${ix}">Quitar</button></div></div>
     <div class="row">
       ${s.key ? `<label class="small muted" for="k-${ix}">Tono</label><select class="inp" id="k-${ix}" data-in="itemKey" data-ix="${ix}" style="width:auto">${ROOTS.map(i=>`<option value="${i}"${(it.key||s.key).i===i?' selected':''}>${esc(Music.keyName({i,minor:s.key.minor},S.prefs.spell))}${i===s.key.i?' (original)':''}</option>`).join('')}</select><span class="muted small">${esc(Music.semiLabel(semi))}</span>` : `<span class="badge warn">Tono original sin confirmar</span>`}
-      <span class="edge">Entra <b>${esc(tr(s,e.first,semi,S.prefs.spell))}</b> · Sale <b>${esc(tr(s,e.last,semi,S.prefs.spell))}</b></span>
+      <span class="edge">Entra <b>${esc(tr(s,e.first,semi,S.prefs.spell))}</b> · Sale <b>${esc(tr(s,e.last,semi,S.prefs.spell))}</b>${s.key && chorusProg(s, it.key||s.key) ? ` · Coro <b>${esc(chorusProg(s, it.key||s.key))}</b>` : ''}</span>
     </div>
+    ${sectionsSummary(s) ? `<span class="muted small">${esc(sectionsSummary(s))}</span>` : ''}
     <div class="row"><input class="inp" id="n-${ix}" data-in="itemNotes" data-ix="${ix}" placeholder="Notas: intro suave, repetir coro…" value="${esc(it.notes||'')}" style="flex:1;min-width:180px">
       ${ix<sl.items.length-1?`<label class="small"><input type="checkbox" id="l-${ix}" data-in="itemLink" data-ix="${ix}" ${it.link?'checked':''}> Enlazar con la siguiente</label>`:''}</div>
     ${it.link && ix<sl.items.length-1 ? `<span class="linkmark">↳ Transición sin pausa hacia la siguiente canción</span>`:''}
+    ${ix < sl.items.length-1 ? connGapHTML(sl, it, ix) : ''}
   </div></div>`;
+}
+function connGapHTML(sl, it, ix){
+  const s = songById(it.songId), nx = sl.items[ix+1], ns = nx && songById(nx.songId); if(!s || !ns) return '';
+  const ka = it.key || s.key, kb = nx.key || ns.key, t = it.transition;
+  const stale = t && t.from && ka && kb && (t.from.i !== ka.i || t.to.i !== kb.i);
+  const out = s.key ? edgesIn(s, ka).last : null, inn = ns.key ? edgesIn(ns, kb).first : null;
+  return `<div class="conn-gap">${t ? `<label class="small" for="t-${ix}">Transición</label><input class="inp trans-inp" id="t-${ix}" data-in="itemTrans" data-ix="${ix}" value="${esc(t.text)}" placeholder="Acordes, por ejemplo Am7 D7">${stale ? '<span class="badge warn">Cambiaste un tono: revísala</span>' : ''}`
+    : `<span class="edge">Sale <b>${esc(out || '—')}</b> → entra <b>${esc(inn || '—')}</b>${ka && kb ? ` · ${esc(keyRelation(ka, kb).label)}` : ''}</span>`}
+    <button class="btn sm" data-act="connSet" data-ix="${ix}">${t ? 'Otras opciones' : 'Sugerir transición'}</button></div>`;
 }
 
 VIEWS.importar = () => `
@@ -1168,10 +1249,76 @@ VIEWS.ajustes = () => `
       <li><span class="badge ok">Hecho</span> Fase 2 · Motor de acordes, transposición, selector de tonos y filtro por tonalidad</li>
       <li><span class="badge ok">Hecho</span> Fase 3 · Modo en vivo y listas de servicio con tono propio</li>
       <li><span class="badge">Pendiente</span> OCR para PDF escaneados (requiere un servicio o un modelo descargable)</li>
-      <li><span class="badge">Pendiente</span> Fase 4 · Conexión manual de canciones y asistente de transiciones</li>
+      <li><span class="badge ok">Hecho</span> Fase 4 · Conexión de canciones, tono común y asistente de transiciones</li>
       <li><span class="badge">Pendiente</span> Fase 5 · Acompañamiento para prédicas y biblioteca de progresiones</li>
       <li><span class="badge">Pendiente</span> Fase 6 · Sincronización, equipo, voz, pedal Bluetooth, audio</li>
     </ul></section>`;
+
+/* ================= CONECTAR CANCIONES (fase 4) ================= */
+const keyOf = (song, k) => k || song.key;
+function edgesIn(song, key){ const e = edgeChords(song), semi = song.key && key ? Music.semiBetween(song.key, key) : 0; return {first: e.first ? tr(song, e.first, semi, S.prefs.spell) : null, last: e.last ? tr(song, e.last, semi, S.prefs.spell) : null}; }
+/* Progresión con la que empieza el coro (hasta 4 acordes), en el tono indicado */
+function chorusProg(song, key){
+  const sec = song.sections.find(x => x.type === 'coro'); if(!sec) return '';
+  const semi = song.key && key ? Music.semiBetween(song.key, key) : 0, out = [];
+  for(const ln of sec.lines) for(const c of [...ln.chords].sort((a,b) => a.pos - b.pos)) if(c.ok && out.length < 4){ const t = tr(song, c.raw, semi, S.prefs.spell); if(out[out.length-1] !== t) out.push(t); }
+  return out.join(' ');
+}
+const sectionsSummary = song => [...new Set(song.sections.filter(x => x.label).map(x => x.label.replace(/\s+\d+$/,'')))].join(' · ');
+const kname = k => Music.keyName(k, S.prefs.spell);
+function keySelectHTML(song, key, attrs){
+  return `<select class="inp" ${attrs} style="width:auto">${ROOTS.map(i => `<option value="${i}"${key.i === i ? ' selected' : ''}>${esc(kname({i, minor:song.key.minor}))}${i === song.key.i ? ' (original)' : ''}</option>`).join('')}</select>`;
+}
+function connPickHTML(slot, song, sel, label){
+  if(!song) return `<section class="card"><p class="eyebrow">${label}</p><input class="inp" id="cq-${slot}" type="search" placeholder="Busca por título o una frase" autocomplete="off"><div id="cr-${slot}"></div></section>`;
+  const key = keyOf(song, sel.key), e = song.key ? edgesIn(song, key) : edgeChords(song), prog = song.key ? chorusProg(song, key) : '';
+  return `<section class="card"><div class="row" style="justify-content:space-between"><p class="eyebrow">${label}</p><button class="linkbtn" data-act="connClear" data-v="${slot}">Cambiar</button></div>
+    <h3>${esc(song.title)}</h3>
+    ${song.key ? `<div class="row"><label class="small muted" for="ck-${slot}">Tono</label>${keySelectHTML(song, key, `id="ck-${slot}"`)}</div>` : `<span class="badge warn">Tono original sin confirmar: ábrela en Editar</span>`}
+    <span class="edge">Entra <b>${esc(e.first || '—')}</b> · Sale <b>${esc(e.last || '—')}</b>${prog ? ` · Coro <b>${esc(prog)}</b>` : ''}</span>
+    ${sectionsSummary(song) ? `<span class="muted small">${esc(sectionsSummary(song))}</span>` : ''}</section>`;
+}
+function connNextHTML(A, key){
+  const r = rankByKey(key, S.songs.filter(x => x.id !== A.id)).slice(0, 8);
+  if(!r.length) return '';
+  return `<section class="sect"><header><h2>Conectan bien con “${esc(A.title)}” en ${esc(kname(key))}</h2></header>
+    <p class="muted small">Primero las del mismo tono o su relativa, luego las de tonos vecinos. Puedes usarlas en su tono o pasarlas a ${esc(kname(key))}.</p>
+    <div class="list">${r.map(x => { const same = x.fit.i === x.song.key.i && x.fit.minor === x.song.key.minor;
+      return `<div class="conn-hit"><div class="lv-hit-t"><b>${esc(x.song.title)}</b><span>${esc(kname(x.song.key))} · ${esc(x.rel.label)}</span></div>
+        <div class="row">${same ? '' : `<button class="btn sm pri" data-act="connPick" data-slot="b" data-id="${x.song.id}" data-k="${x.fit.i}">En ${esc(kname(x.fit))}</button>`}<button class="btn sm${same ? ' pri' : ''}" data-act="connPick" data-slot="b" data-id="${x.song.id}">En su tono ${esc(kname(x.song.key))}</button></div></div>`; }).join('')}</div></section>`;
+}
+function transitionsHTML(A, ka, B, kb, sl){
+  if(!A.key || !B.key) return `<div class="callout"><p>Para sugerir transiciones las dos canciones necesitan su tonalidad original confirmada.</p></div>`;
+  const out = edgesIn(A, ka).last, inn = edgesIn(B, kb).first;
+  const why = [];
+  if(!out) why.push(`no encontré el último acorde de “${A.title}”`);
+  if(!inn) why.push(`no encontré el primer acorde de “${B.title}”`);
+  for(const x of [A, B]) if(x.conf && x.conf.key !== 'alta') why.push(`la tonalidad de “${x.title}” es estimada`);
+  const opts = transitionOptions(ka, kb); S.conn.opts = opts;
+  const fit = matchKey(B.key, ka), fitDiff = fit && (fit.i !== kb.i || fit.minor !== kb.minor);
+  const chip = (c, cls, lab) => `<span class="ch ${cls}">${lab ? `<small>${lab}</small>` : ''}${esc(c)}</span>`;
+  const arr = '<span class="arr">→</span>';
+  return `<section class="sect"><header><h2>Cómo pasar de una a otra</h2></header>
+    <p class="small">Sale de <b>${esc(A.title)}</b> en <b>${esc(kname(ka))}</b>${out ? ` con <b class="mono">${esc(out)}</b>` : ''} y entra a <b>${esc(B.title)}</b> en <b>${esc(kname(kb))}</b>${inn ? ` con <b class="mono">${esc(inn)}</b>` : ''}.</p>
+    ${why.length ? `<div class="callout"><p>Sugerencia provisional: ${esc(why.join('; '))}.</p></div>` : ''}
+    ${fitDiff ? `<div class="callout info"><p>¿Prefieres no cambiar de tono? Toca “${esc(B.title)}” en <b>${esc(kname(fit))}</b>${fit.relative ? ' (relativa)' : ''} y conectan directo.</p><button class="btn sm" data-act="connSetKey" data-i="${fit.i}">Poner en ${esc(kname(fit))}</button></div>` : ''}
+    ${opts.map((o, i) => `<article class="card trans"><header><b>${esc(o.name)}</b><span class="badge${o.level === 'fácil' ? ' ok' : ''}">${o.level}</span></header>
+      <div class="path">${chip(out || '?', 'out', 'Sale')}${o.chords.map(c => arr + chip(c, 'mid')).join('')}${arr}${chip(inn || '?', 'in', 'Entra')}</div>
+      <p class="small">${esc(o.why)}</p>
+      ${sl ? `<div><button class="btn sm" data-act="connUse" data-i="${i}">Usar en “${esc(sl.name)}”</button></div>` : ''}</article>`).join('')}
+  </section>`;
+}
+VIEWS.conectar = () => {
+  const C = S.conn || (S.conn = {a:null, b:null});
+  const A = C.a && songById(C.a.id), B = C.b && songById(C.b.id);
+  const sl = C.setId ? S.setlists.find(x => x.id === C.setId) : null;
+  return `
+  <header class="ph"><div><button class="linkbtn" data-act="back">← Volver</button><p class="eyebrow">Conectar canciones${sl ? ' · ' + esc(sl.name) : ''}</p><h1>Asistente de transiciones</h1></div></header>
+  <p class="muted small">Elige la canción que estás tocando y la que sigue. Las sugerencias no cambian tus canciones.</p>
+  <div class="cols two">${connPickHTML('a', A, C.a, 'Canción actual')}${connPickHTML('b', B, C.b, 'Siguiente canción')}</div>
+  ${A && A.key && !B ? connNextHTML(A, keyOf(A, C.a.key)) : ''}
+  ${A && B ? transitionsHTML(A, keyOf(A, C.a.key), B, keyOf(B, C.b.key), sl) : ''}`;
+};
 
 /* ================= NAVEGACIÓN ================= */
 function render(){
@@ -1180,7 +1327,7 @@ function render(){
   document.querySelectorAll('#nav [data-tab]').forEach(b => b.setAttribute('aria-current', b.dataset.tab === tabOf(view) ? 'page' : 'false'));
   AFTER[view] && AFTER[view](params);
 }
-const tabOf = v => ({cancion:'biblioteca', servicio:'servicios', revisar:'importar'})[v] || v;
+const tabOf = v => ({cancion:'biblioteca', servicio:'servicios', revisar:'importar', conectar:'servicios'})[v] || v;
 function go(view, params={}, push=true){ if(push) S.stack.push(S.route); S.route = {view, params}; render(); window.scrollTo(0,0); }
 function back(){ const r = S.stack.pop(); if(r){ if(r.view==='cancion') openSong(r.params.id, {semi:S.cur&&S.cur.id===r.params.id?S.cur.semi:0}, false); else { S.route = r; render(); } } else go('inicio', {}, false); }
 const AFTER = {
@@ -1200,6 +1347,16 @@ const AFTER = {
     d.addEventListener('drop', e => importFiles([...e.dataTransfer.files]));
     $('#perpage').addEventListener('change', e => { S.prefs.perPage = e.target.checked; savePrefs(); });
     $('#pasteform').addEventListener('submit', async e => { e.preventDefault(); const txt = $('#pt-text').value; if(!txt.trim()) return toast('Pega primero la letra y los acordes'); const s = songFromText(txt, {title:$('#pt-title').value.trim(), sourceName:'Texto pegado'}); await saveSong(s); startReview([s.id]); });
+  },
+  conectar(){
+    for(const slot of ['a','b']){
+      const q = $('#cq-' + slot);
+      if(q){ q.addEventListener('input', () => { const other = S.conn[slot === 'a' ? 'b' : 'a']; const r = q.value.trim() ? searchIndex(S.songs, S.index, q.value).filter(x => !other || x.song.id !== other.id).slice(0, 6) : [];
+        $('#cr-' + slot).innerHTML = r.length ? `<div class="list" style="margin-top:8px">${r.map(x => `<div class="item" role="button" tabindex="0" data-act="connPick" data-slot="${slot}" data-id="${x.song.id}"><span class="t">${esc(x.song.title)}</span><span class="r">${keyBadge(x.song.key)}</span><span class="s">${esc(x.song.artist || '')}</span></div>`).join('')}</div>` : (q.value.trim() ? '<p class="muted small">Sin coincidencias.</p>' : ''); });
+        if(slot === 'a' || S.conn.a) q.focus(); }
+      const k = $('#ck-' + slot);
+      if(k) k.addEventListener('change', () => { const song = songById(S.conn[slot].id); S.conn[slot].key = {i:+k.value, minor:song.key.minor}; render(); });
+    }
   },
   revisar(){ const ta = $('#rv-text'); if(!ta) return; let t; ta.addEventListener('input', () => { clearTimeout(t); t = setTimeout(updateReviewPreview, 180); }); ['#rv-key','#rv-mode'].forEach(sel => $(sel).addEventListener('change', updateReviewPreview)); updateReviewPreview(); }
 };
@@ -1409,7 +1566,7 @@ function renderLive(keep){
   if(sl && v.ix!==null && v.ix < sl.items.length-1){
     const nIt = sl.items[v.ix+1], ns = songById(nIt.songId);
     if(ns){ const nsemi = ns.key && nIt.key ? Music.semiBetween(ns.key, nIt.key) : 0; const e = edgeChords(ns);
-      nextInfo = `<div class="lv-next">${item && item.link ? '<b style="font-family:var(--f-body)">↳ Sin pausa</b> · ':''}Siguiente: ${esc(ns.title)} · entra en <b>${esc(tr(ns, e.first, nsemi, S.prefs.spell))}</b>${ns.key?` (tono ${esc(Music.keyName({i:Music.mod(ns.key.i+nsemi),minor:ns.key.minor}, S.prefs.spell))})`:''}</div>`; }
+      nextInfo = `${item && item.transition && item.transition.text ? `<div class="lv-trans">Transición: <b>${esc(item.transition.text.split(/\s+/).join(' → '))}</b> → ${esc(ns.title)}</div>` : ''}<div class="lv-next">${item && item.link ? '<b style="font-family:var(--f-body)">↳ Sin pausa</b> · ':''}Siguiente: ${esc(ns.title)} · entra en <b>${esc(tr(ns, e.first, nsemi, S.prefs.spell))}</b>${ns.key?` (tono ${esc(Music.keyName({i:Music.mod(ns.key.i+nsemi),minor:ns.key.minor}, S.prefs.spell))})`:''}</div>`; }
   }
   L.classList.toggle('locked', v.locked);
   L.innerHTML = `
@@ -1496,6 +1653,27 @@ const ACT = {
   prefNoteColor(b){ S.prefs.noteColor = b.dataset.v; applyNotePrefs(); savePrefs(); render(); },
   prefNoteItalic(b){ S.prefs.noteItalic = b.dataset.v === '1'; applyNotePrefs(); savePrefs(); render(); },
   noteLine(b){ markNoteLines(b.dataset.v); },
+  connNew(){ S.conn = {a:null, b:null}; go('conectar'); },
+  connFrom(){ const s = songById(S.cur.id); S.conn = {a:{id:s.id, key: s.key ? {i:Music.mod(s.key.i + S.cur.semi), minor:s.key.minor} : null}, b:null}; go('conectar'); },
+  connSet(b){ const sl = S.setlists.find(x => x.id === S.route.params.id), ix = +b.dataset.ix, it = sl.items[ix], nx = sl.items[ix + 1];
+    S.conn = {a:{id:it.songId, key:it.key}, b:{id:nx.songId, key:nx.key}, setId:sl.id, ix}; go('conectar'); },
+  connPick(b){ const song = songById(b.dataset.id); S.conn[b.dataset.slot] = {id:song.id, key: b.dataset.k !== undefined && song.key ? {i:+b.dataset.k, minor:song.key.minor} : song.key}; render(); window.scrollTo(0, 0); },
+  connClear(b){ S.conn[b.dataset.v] = null; S.conn.opts = null; render(); },
+  connSetKey(b){ const song = songById(S.conn.b.id); S.conn.b.key = {i:+b.dataset.i, minor:song.key.minor}; render(); },
+  async connUse(b){
+    const C = S.conn, o = C.opts[+b.dataset.i], sl = S.setlists.find(x => x.id === C.setId); if(!sl) return;
+    const A = songById(C.a.id), B = songById(C.b.id), it = sl.items[C.ix], nx = sl.items[C.ix + 1];
+    if(!it || !nx || it.songId !== A.id || nx.songId !== B.id) return toast('La lista cambió; vuelve a abrir el asistente desde la lista');
+    it.key = keyOf(A, C.a.key); nx.key = keyOf(B, C.b.key);
+    it.transition = {text: o.chords.join(' '), name:o.name, from:it.key, to:nx.key}; it.link = true;
+    await saveSetlist(sl); toast(`Transición guardada en “${sl.name}”`); back();
+  },
+  async commonKey(b){
+    if(!armed(b, 'Toca otra vez para cambiar todas')) return;
+    const sl = S.setlists.find(x => x.id === S.route.params.id), target = {i:+$('#commonKey').value, minor:false}; let n = 0;
+    for(const it of sl.items){ const s = songById(it.songId); if(!s || !s.key) continue; const m = matchKey(s.key, target); it.key = {i:m.i, minor:m.minor}; n++; }
+    await saveSetlist(sl); render(); toast(`${pl(n,'canción','canciones')} en ${kname(target)} (las menores en ${kname({i:Music.mod(target.i + 9), minor:true})})`);
+  },
   fixSpell(){ const ch = S.review.spell || []; if(!ch.length) return; const ta = $('#rv-text'); ta.value = swapChordTokens(ta.value, ch.map(c => [c.from, c.to])); updateReviewPreview(); toast('Escritura corregida'); },
   undoSpell(){ const s = songById(S.review.queue[S.review.pos]); const ch = (s.meta && s.meta.spellFix) || []; const ta = $('#rv-text'); ta.value = swapChordTokens(ta.value, ch.map(c => [c.to, c.from])); delete s.meta.spellFix; const box = $('#rv-spellfix'); box && box.remove(); updateReviewPreview(); toast('Acordes como venían en el documento'); },
   autoNotes(){ const ta = $('#rv-text'); let n = 0; ta.value = ta.value.split('\n').map(l => { if(/^\s*\{/.test(l) || !isNoteText(l)) return l; n++; return noteDirective(l.trim(), 'left'); }).join('\n'); updateReviewPreview(); toast(n ? `${n} ${n===1?'frase marcada':'frases marcadas'} como nota` : 'No encontré frases como “Se repite” o “x2”'); },
@@ -1546,6 +1724,7 @@ document.addEventListener('change', async e => {
   if(k === 'itemKey'){ const s = songById(it.songId); it.key = {i:+el.value, minor:s.key.minor}; await saveSetlist(sl); render(); }
   if(k === 'itemNotes'){ it.notes = el.value; await saveSetlist(sl); }
   if(k === 'itemLink'){ it.link = el.checked; await saveSetlist(sl); render(); }
+  if(k === 'itemTrans'){ const v = el.value.trim(); if(!v) delete it.transition; else it.transition = {...(it.transition || {}), text:v}; await saveSetlist(sl); render(); }
 });
 $('#backuppick').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if(f) readBackupFile(f); });
 $('#filepick').addEventListener('change', e => { const f = [...e.target.files]; e.target.value = ''; if(S.route.view!=='importar') go('importar'); importFiles(f); });

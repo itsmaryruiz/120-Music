@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path');
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const eng = html.slice(html.indexOf('/*ENGINE-START*/'), html.indexOf('/*ENGINE-END*/'));
-eval(eng + ';globalThis.E={Music,parseSongText,songToText,itemsToText,searchIndex,buildIndex,checkBackup,planRestore,isNoteText,matchKey,respellSections}');
+eval(eng + ';globalThis.E={Music,parseSongText,songToText,itemsToText,searchIndex,buildIndex,checkBackup,planRestore,isNoteText,matchKey,respellSections,transitionOptions,keyRelation,rankByKey}');
 const {Music} = E; let fail = 0;
 const eq = (a, b, m) => { if (JSON.stringify(a) !== JSON.stringify(b)) { fail++; console.log('FALLA', m, JSON.stringify(a), '≠', JSON.stringify(b)); } else console.log('ok  ', m); };
 const T = (c, s, k) => Music.transposeSym(c, s, Music.flatsFor(k, s, 'auto'), false);
@@ -29,6 +29,20 @@ eq(ps.sections.map(x => [x.type, x.label]), [['verso','Verso 1'],['interludio','
 eq(ps.sections[1].lines[0].chords.map(c => c.raw), ['C','G','Am','F'], 'los acordes del intermedio quedan dentro de su sección');
 eq(E.parseSongText(E.songToText({sections:ps.sections}), {bodyOnly:true}).sections.map(x => x.label), ps.sections.map(x => x.label), 'los títulos se conservan al editar');
 eq(E.parseSongText('[G]Hola [D]mundo', {bodyOnly:true}).sections[0].lines[0].chords.length, 2, 'ChordPro [G]palabra sigue funcionando');
+/* Fase 4: transiciones */
+const K = (i, minor=false) => ({i, minor});
+const to = (a, b) => E.transitionOptions(a, b).map(o => [o.id, o.chords.join(' ')]);
+eq(E.keyRelation(K(4,true), K(7)).label, 'Relativa', 'Em y G son relativas');
+eq(E.keyRelation(K(2), K(7)).label, 'Tono vecino', 'D y G son vecinos');
+eq(E.keyRelation(K(0), K(6)).label, 'Tono lejano', 'C y F# son lejanos');
+eq(to(K(4,true), K(7)), [['directo',''],['v7','D7'],['iiv','Am7 D7'],['sus','Dsus4 D']], 'Em → G: directo (relativas) y alternativas');
+eq(to(K(0), K(2)), [['subida','A7'],['iiv','Em7 A7'],['sus','Asus4 A'],['pivote','G A7']], 'C → D: subida de un tono, con acorde puente G');
+eq(to(K(2), K(7))[0], ['directo',''], 'D → G: directo por ser vecinos');
+eq(to(K(2), K(7)).find(o => o[0] === 'pivote'), ['pivote','Em D7'], 'D → G: Em es el acorde puente');
+eq(to(K(9,true), K(2,true)).find(o => o[0] === 'iiv'), ['iiv','Em7b5 A7'], 'Am → Dm: ii–V menor (Em7b5 → A7)');
+eq(to(K(3), K(8)).find(o => o[0] === 'v7'), ['v7','Eb7'], 'Eb → Ab: escribe Eb7 (no D#7)');
+eq(to(K(7), K(7)).map(o => o[0]), ['directo','sus'], 'mismo tono: directo o suspensión, sin inventar modulaciones');
+eq(E.rankByKey(K(7), [{title:'Lejos', key:K(1)}, {title:'Vecina', key:K(2)}, {title:'Relativa', key:K(4,true)}, {title:'Sin tono', key:null}]).map(r => r.song.title), ['Relativa','Vecina','Lejos'], 'ordena canciones por cercanía de tono');
 /* Escritura de acordes según la tonalidad */
 const Dm = {i:2, minor:true}, Ck = {i:0, minor:false};
 const sp = (c, k) => Music.transposeSym(c, 0, false, true, k);
