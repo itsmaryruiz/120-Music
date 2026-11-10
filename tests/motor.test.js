@@ -23,6 +23,12 @@ const song = {id:'x', title:p.meta.title, artist:p.meta.artist, key:p.meta.key, 
 const ix = new Map([['x', E.buildIndex(song)]]);
 const r = E.searchIndex([song], ix, 'segunda linea del berso');
 eq(r.length ? ix.get('x').lines[r[0].hits[0].k].raw : null, 'segunda línea del verso', 'búsqueda tolera acentos y errores');
+/* Títulos de sección compuestos */
+const ps = E.parseSongText(`[Verso 1]\nG\nuna línea\n\n[Intermedio/Instrumental]\nC   G   Am   F\n\nIntermedio\nD\n\nCoro / Chorus\nG\notra línea\n\n[Vamp final]\nG\n\n[Ministración libre]\nC`, {bodyOnly:true});
+eq(ps.sections.map(x => [x.type, x.label]), [['verso','Verso 1'],['interludio','Intermedio/Instrumental'],['interludio','Intermedio'],['coro','Coro/Chorus'],['final','Vamp final'],['otro','Ministración libre']], 'reconoce [Intermedio/Instrumental] y otros títulos de sección');
+eq(ps.sections[1].lines[0].chords.map(c => c.raw), ['C','G','Am','F'], 'los acordes del intermedio quedan dentro de su sección');
+eq(E.parseSongText(E.songToText({sections:ps.sections}), {bodyOnly:true}).sections.map(x => x.label), ps.sections.map(x => x.label), 'los títulos se conservan al editar');
+eq(E.parseSongText('[G]Hola [D]mundo', {bodyOnly:true}).sections[0].lines[0].chords.length, 2, 'ChordPro [G]palabra sigue funcionando');
 /* Abrir otra canción en el tono que se está tocando */
 const C = {i:0, minor:false};
 eq(E.matchKey({i:2, minor:false}, C), {i:0, minor:false, relative:false}, 'canción en D se abre en C si estoy en C');

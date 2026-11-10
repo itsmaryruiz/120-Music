@@ -26,6 +26,7 @@ Están hechas las fases 1, 2 y 3 del plan de `docs/PROMPT_ORIGINAL.md`, todas fu
   - Frases como "Se repite", "x2", "(Todos)" son *notas*: renglón aparte, en rojo y cursiva (color rojo/azul/gris y cursiva se cambian en Ajustes), alineadas a la izquierda, al centro o a la derecha.
   - Se detectan solas al importar (`isNoteText`). En el editor hay botones para marcar la línea del cursor como nota (izquierda, centro, derecha), quitarla, o buscar frases de repetición. "(x2)", "(bis)" dentro de un renglón de letra se pintan igual sin moverlo.
   - En el texto del editor una nota se escribe `{nota: …}`, `{nota-centro: …}` o `{nota-derecha: …}`. `{c: …}` de ChordPro también es nota. Al editar (`bodyOnly`) no se detectan notas solas: así una frase que se desmarcó se queda como letra.
+  - Títulos de sección compuestos ("[Intermedio/Instrumental]", "Coro / Chorus") y cualquier título entre corchetes ("[Ministración libre]") son secciones, con el texto tal cual. "Intermedio" es del tipo interludio.
   - Cada tipo de sección tiene su color (etiqueta + raya izquierda): verso oscuro, pre-coro verde azulado, coro azul con fondo, puente violeta, intro/interludio/final gris.
 - **Copia de seguridad** (en Ajustes)
   - Exporta canciones, listas y documentos originales en un solo `.json` (`120-worship-copia-AAAA-MM-DD.json`). En iPhone se guarda con la hoja de compartir ("Guardar en Archivos"); en computadora se descarga.

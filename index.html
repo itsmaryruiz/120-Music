@@ -162,7 +162,7 @@ mark{background:var(--accent-soft);color:var(--chord);border-radius:3px;padding:
 /* Secciones: cada tipo con su color (etiqueta + raya a la izquierda); el coro además lleva fondo para encontrarlo de un vistazo */
 .sec{--sec:var(--muted);--sec-soft:var(--surface-2);margin:0 0 16px;padding:10px 0 10px 14px;border-left:3px solid var(--sec);border-radius:0 10px 10px 0}
 .sec:last-child{margin-bottom:0}
-.sec[data-type="sin"],.sec[data-type="otro"]{border-left-color:transparent;padding-left:0}
+.sec[data-type="sin"]{border-left-color:transparent;padding-left:0}
 .sec[data-type="verso"]{--sec:var(--ink);--sec-soft:var(--surface-2)}
 .sec[data-type="precoro"]{--sec:var(--info);--sec-soft:var(--info-soft)}
 .sec[data-type="coro"]{--sec:var(--accent);--sec-soft:var(--accent-soft);background:color-mix(in srgb,var(--accent-soft) 55%,transparent);padding-right:12px}
@@ -384,17 +384,19 @@ function matchKey(songKey, target){
 /* ================= PARSER DE DOCUMENTOS (texto → canción estructurada) ================= */
 const SECTION_MAP = [
   [/^intro/i,'intro','Intro'], [/^(verso|estr?of?r?a|verse)/i,'verso','Verso'], [/^(pre[- ]?coro|precoro|pre[- ]?chorus)/i,'precoro','Pre-coro'],
-  [/^(coro|chorus|estribillo|refr)/i,'coro','Coro'], [/^(puente|bridge)/i,'puente','Puente'], [/^(interludio|interlude|instrumental)/i,'interludio','Interludio'],
+  [/^(coro|chorus|estribillo|refr)/i,'coro','Coro'], [/^(puente|bridge)/i,'puente','Puente'], [/^intermedio/i,'interludio','Intermedio'], [/^(interludio|interlude|instrumental)/i,'interludio','Interludio'],
   [/^(final|outro|ending|coda|tag|vamp)/i,'final','Final']
 ];
 function sectionInfo(w){ for(const [re,type,label] of SECTION_MAP) if(re.test(w)) return {type,label}; return {type:'otro',label:w}; }
-const HEADER_RE = /^\s*[\[(]?\s*(intro(?:ducci[oó]n)?|verso|estr?of?r?a|verse|pre[- ]?coro|precoro|pre[- ]?chorus|coro|chorus|estribillo|refr[aá]n|puente|bridge|interludio|interlude|instrumental|final|outro|ending|coda|tag|vamp)\s*(\d+)?\s*[\])]?\s*(?:[:.\-–]\s*|\s+|$)(.*)$/i;
+const HEADER_RE = /^\s*[\[(]?\s*(intro(?:ducci[oó]n)?|verso|estr?of?r?a|verse|pre[- ]?coro|precoro|pre[- ]?chorus|coro|chorus|estribillo|refr[aá]n|puente|bridge|interludio|intermedio|interlude|instrumental|final|outro|ending|coda|tag|vamp)\s*(\d+)?\s*[\])]?\s*(?:[:.\-–]\s*|\s+|$)(.*)$/i;
 /* Notas de interpretación ("Se repite", "x2", "(Todos)"...): se muestran aparte, con su propio estilo y alineación */
 const NOTE_ALIGNS = {nota:'left', 'nota-centro':'center', 'nota-derecha':'right'};
 const NOTE_RE = /^[\s(\[\/*]*(se\s+repite|repite|repetir|repetimos|bis|x\s*\d+|\d+\s*x|\d+\s+veces|(dos|tres|cuatro|cinco)\s+veces|otra\s+vez)\b/i;
 const NOTE_PAREN_RE = /^\(\s*(solo|todos|hombres|mujeres|damas|caballeros|instrumental|a\s*cap+el+a|pausa|rit\.?|ritardando|suave|fuerte|sube|baja|modula)\b[^)]*\)$/i;
 function isNoteText(t){ t = String(t||'').trim(); return !!t && t.length <= 60 && (NOTE_RE.test(t) || NOTE_PAREN_RE.test(t)); }
 function noteDirective(text, align){ return `{${({left:'nota', center:'nota-centro', right:'nota-derecha'})[align] || 'nota'}: ${text}}`; }
+/* Palabra de sección sola (con número opcional): para títulos compuestos como "Intermedio/Instrumental" */
+const SEC_WORD_RE = /^(intro(?:ducci[oó]n)?|verso|estr?of?r?a|verse|pre[- ]?coro|precoro|pre[- ]?chorus|coro|chorus|estribillo|refr[aá]n|puente|bridge|interludio|intermedio|interlude|instrumental|final|outro|ending|coda|tag|vamp)\s*\d*$/i;
 const SEP_RE = /^(\|+:?|:?\|+|\/+|-+|–|—|%|\.{2,}|[()\[\]]+|x\d+|\(x\d+\)|\*+|n\.?c\.?|\(?\d+x\)?)$/i;
 
 function analyzeChordLine(line){
@@ -481,6 +483,14 @@ function parseSongText(text, {bodyOnly=false, fileName='', autoNotes=!bodyOnly} 
     }
     if(/^(capo|tempo|bpm|comp[aá]s|ritmo)\b\s*[:=]?/i.test(t) && t.length < 40){ meta.notes.push(t); continue; }
 
+    /* Títulos de sección compuestos ("[Intermedio/Instrumental]", "Coro / Chorus") o cualquier título entre corchetes ("[Vamp final]") */
+    const inner = t.replace(/^\/+\s*|\s*\/+$/g,'').replace(/^[\[(]\s*/,'').replace(/\s*[\])]?\s*:?\s*$/,'');
+    const parts = inner.split(/\s*\/\s*/);
+    const bracketed = /^\[[^\[\]]+\]\s*:?$/.test(t) && !Music.parse(inner) && !isNoteText(inner) && !analyzeChordLine(inner).isChord;
+    if((parts.length > 1 && parts.every(x => SEC_WORD_RE.test(x))) || bracketed){
+      flush(); const info = sectionInfo(parts[0]);
+      newSec(info.type, parts.length > 1 ? parts.join('/') : inner); seen = true; continue;
+    }
     const h = HEADER_RE.exec(t.replace(/^\/+\s*|\s*\/+$/g,''));
     if(h){
       const rest = h[3].replace(/[\])]\s*$/,'').trim();
