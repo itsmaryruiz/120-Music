@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path');
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const eng = html.slice(html.indexOf('/*ENGINE-START*/'), html.indexOf('/*ENGINE-END*/'));
-eval(eng + ';globalThis.E={Music,parseSongText,songToText,itemsToText,searchIndex,buildIndex,checkBackup,planRestore}');
+eval(eng + ';globalThis.E={Music,parseSongText,songToText,itemsToText,searchIndex,buildIndex,checkBackup,planRestore,isNoteText}');
 const {Music} = E; let fail = 0;
 const eq = (a, b, m) => { if (JSON.stringify(a) !== JSON.stringify(b)) { fail++; console.log('FALLA', m, JSON.stringify(a), '≠', JSON.stringify(b)); } else console.log('ok  ', m); };
 const T = (c, s, k) => Music.transposeSym(c, s, Music.flatsFor(k, s, 'auto'), false);
@@ -23,6 +23,17 @@ const song = {id:'x', title:p.meta.title, artist:p.meta.artist, key:p.meta.key, 
 const ix = new Map([['x', E.buildIndex(song)]]);
 const r = E.searchIndex([song], ix, 'segunda linea del berso');
 eq(r.length ? ix.get('x').lines[r[0].hits[0].k].raw : null, 'segunda línea del verso', 'búsqueda tolera acentos y errores');
+/* Notas de interpretación */
+const nt = `[Coro]\nG       D\nfrase de prueba\nSe repite\n(x2)\n(Todos)\n{nota-derecha: Una vez más}\n{c: Suave}\n(Aleluya)`;
+const pn = E.parseSongText(nt, {});
+eq(pn.sections[0].lines.filter(l => l.note).map(l => [l.lyric, l.note]), [['Se repite','left'],['(x2)','left'],['(Todos)','left'],['Una vez más','right'],['Suave','left']], 'detecta notas y respeta la alineación');
+eq(pn.sections[0].lines.some(l => !l.note && l.lyric === '(Aleluya)'), true, 'una letra entre paréntesis sigue siendo letra');
+eq(pn.stats.lyricLines, 2, 'las notas no cuentan como letra');
+const pn2 = E.parseSongText(E.songToText({sections:pn.sections}), {bodyOnly:true});
+eq(JSON.stringify(pn2.sections), JSON.stringify(pn.sections), 'las notas sobreviven al editar (texto de ida y vuelta)');
+eq(E.parseSongText('Se repite', {bodyOnly:true}).sections[0].lines[0].note, undefined, 'al editar, una frase sin marcar se queda como letra');
+eq(E.isNoteText('Repetir 2 veces') && E.isNoteText('// x2 //') && !E.isNoteText('Te alabaré'), true, 'reconoce frases de repetición');
+eq(E.buildIndex({title:'t', artist:'', sections:pn.sections}).lines.some(l => l.raw === 'Se repite'), false, 'las notas no entran en la búsqueda por letra');
 /* Copia de seguridad */
 const bk = (o) => ({app:'120 Worship', version:1, exportedAt:1, songs:[], setlists:[], files:[], ...o});
 eq(E.checkBackup(bk({})), null, 'copia válida');

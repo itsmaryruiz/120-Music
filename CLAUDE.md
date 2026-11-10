@@ -21,6 +21,11 @@ Están hechas las fases 1, 2 y 3 del plan de `docs/PROMPT_ORIGINAL.md`, todas fu
   - Listas de servicio con tono propio por canción, notas, enlace con la siguiente y opción de duplicar.
   - Modo en vivo con pantalla oscura, botones grandes, bloqueo contra toques accidentales, búsqueda rápida y navegación por la lista.
   - Al transportar se conserva la posición de lectura y la pantalla no se apaga.
+- **Notas de interpretación y secciones**
+  - Frases como "Se repite", "x2", "(Todos)" son *notas*: renglón aparte, en rojo y cursiva (color rojo/azul/gris y cursiva se cambian en Ajustes), alineadas a la izquierda, al centro o a la derecha.
+  - Se detectan solas al importar (`isNoteText`). En el editor hay botones para marcar la línea del cursor como nota (izquierda, centro, derecha), quitarla, o buscar frases de repetición. "(x2)", "(bis)" dentro de un renglón de letra se pintan igual sin moverlo.
+  - En el texto del editor una nota se escribe `{nota: …}`, `{nota-centro: …}` o `{nota-derecha: …}`. `{c: …}` de ChordPro también es nota. Al editar (`bodyOnly`) no se detectan notas solas: así una frase que se desmarcó se queda como letra.
+  - Cada tipo de sección tiene su color (etiqueta + raya izquierda): verso oscuro, pre-coro verde azulado, coro azul con fondo, puente violeta, intro/interludio/final gris.
 - **Copia de seguridad** (en Ajustes)
   - Exporta canciones, listas y documentos originales en un solo `.json` (`120-worship-copia-AAAA-MM-DD.json`). En iPhone se guarda con la hoja de compartir ("Guardar en Archivos"); en computadora se descarga.
   - Restaurar nunca borra: agrega lo que falta, reemplaza una canción o lista solo si la de la copia es más reciente (`updatedAt`) y nunca sobrescribe un documento original. Antes de restaurar muestra un resumen.
@@ -65,17 +70,18 @@ Es un solo archivo, ordenado por secciones con comentarios `/* ===== ... ===== *
 Song = { id, title, artist, key:{i:0-11, minor:bool}|null,
   conf:{title,artist,key: 'alta'|'media'|'baja'},
   sections:[{type:'intro'|'verso'|'precoro'|'coro'|'puente'|'interludio'|'final'|'otro'|'sin', label,
-             lines:[{chords:[{pos, raw, ok}], lyric}]}],
+             lines:[{chords:[{pos, raw, ok}], lyric, note?:'left'|'center'|'right'}]}],
   tags:[], favorite, status:'revisar'|'ok'|'sin-texto', sourceFileId, sourceName, sourcePage?,
   createdAt, updatedAt, lastOpened, isExample?, meta:{notes:[]} }
 SourceFile = { id, name, ext, size, blob, addedAt, status }
 Setlist = { id, name, date:'YYYY-MM-DD', type, items:[{songId, key, notes, link}], isExample? }
-Prefs = { id:'prefs', spell:'auto'|'sharp'|'flat', liveSize, livePalette:'dark'|'light', perPage, seeded, lastBackup? }
+Prefs = { id:'prefs', spell:'auto'|'sharp'|'flat', liveSize, livePalette:'dark'|'light', perPage, seeded, lastBackup?, noteColor:'red'|'blue'|'gray', noteItalic }
 Backup = { app:'120 Worship' (también se aceptan copias con '120 Music'), version:1, exportedAt, songs:[Song], setlists:[Setlist], files:[{...SourceFile sin blob, type, data:base64}] }
 ```
 
 - `chords[].pos` es la columna del acorde sobre la letra.
 - `ok:false` marca un acorde no reconocido.
+- `note` marca un renglón que es nota de interpretación (no letra): no entra en la búsqueda ni cuenta como letra.
 - La tonalidad original **nunca** cambia al transportar. El tono por servicio se guarda en `Setlist.items[].key`.
 
 ## Reglas que no se rompen (vienen de la especificación)

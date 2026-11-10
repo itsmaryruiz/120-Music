@@ -33,6 +33,7 @@ img{max-width:100%}
   --accent:#2563eb; --accent-ink:#ffffff; --accent-soft:#e3ecfe; --chord:#1d4ed8;
   --sel:#2563eb; --sel-ink:#ffffff;
   --ok:#15803d; --ok-soft:#dcf3e4; --warn:#b4401c; --warn-soft:#fbe7df; --info:#0f766e; --info-soft:#d6f2ee;
+  --note-red:#dc2626; --violet:#7c3aed; --violet-soft:#eee6fe;
   --f-display:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --f-body:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
@@ -43,16 +44,18 @@ img{max-width:100%}
   --accent:#5b8cff; --accent-ink:#06102b; --accent-soft:#18264d; --chord:#8fb0ff;
   --sel:#5b8cff; --sel-ink:#06102b;
   --ok:#6bc690; --ok-soft:#173023; --warn:#f08d66; --warn-soft:#3a1d14; --info:#5fd4c4; --info-soft:#0f2e2b;
+  --note-red:#f87171; --violet:#b79cff; --violet-soft:#2a1f47;
   color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0b1020; --surface:#121a2e; --surface-2:#1a2340; --ink:#e7ecf6; --muted:#97a2bd; --line:#26304a;
   --accent:#5b8cff; --accent-ink:#06102b; --accent-soft:#18264d; --chord:#8fb0ff;
   --sel:#5b8cff; --sel-ink:#06102b;
   --ok:#6bc690; --ok-soft:#173023; --warn:#f08d66; --warn-soft:#3a1d14; --info:#5fd4c4; --info-soft:#0f2e2b;
+  --note-red:#f87171; --violet:#b79cff; --violet-soft:#2a1f47;
   color-scheme:dark}
 /* El modo en vivo fija su propia paleta (oscura por defecto) */
-.live{--bg:#070b16; --surface:#101727; --surface-2:#182136; --ink:#f1f4fa; --muted:#929cb3; --line:#253049; --chord:#8fb0ff; --accent:#8fb0ff; --accent-ink:#06102b; --sel:#f1f3f8; --sel-ink:#07090e; --warn:#ff9a72; color-scheme:dark}
-.live.claro{--bg:#ffffff; --surface:#f2f5fb; --surface-2:#e6ecf7; --ink:#0f172a; --muted:#5b6478; --line:#d8dfeb; --chord:#1d4ed8; --accent:#1d4ed8; --accent-ink:#fff; --sel:#0d1018; --sel-ink:#fff; --warn:#a33d18; color-scheme:light}
+.live{--bg:#070b16; --surface:#101727; --surface-2:#182136; --ink:#f1f4fa; --muted:#929cb3; --line:#253049; --chord:#8fb0ff; --accent:#8fb0ff; --accent-ink:#06102b; --accent-soft:#16244a; --info:#5fd4c4; --info-soft:#0f2e2b; --violet:#b79cff; --violet-soft:#2a1f47; --note-red:#ff7b7b; --sel:#f1f3f8; --sel-ink:#07090e; --warn:#ff9a72; color-scheme:dark}
+.live.claro{--bg:#ffffff; --surface:#f2f5fb; --surface-2:#e6ecf7; --ink:#0f172a; --muted:#5b6478; --line:#d8dfeb; --chord:#1d4ed8; --accent:#1d4ed8; --accent-soft:#e3ecfe; --info:#0f766e; --info-soft:#d6f2ee; --violet:#7c3aed; --violet-soft:#eee6fe; --note-red:#c81e1e; --accent-ink:#fff; --sel:#0d1018; --sel-ink:#fff; --warn:#a33d18; color-scheme:light}
 
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -156,10 +159,24 @@ mark{background:var(--accent-soft);color:var(--chord);border-radius:3px;padding:
 
 /* Hoja de acordes */
 .sheetwrap{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;overflow-x:auto}
-.sec{margin:0 0 18px}
+/* Secciones: cada tipo con su color (etiqueta + raya a la izquierda); el coro además lleva fondo para encontrarlo de un vistazo */
+.sec{--sec:var(--muted);--sec-soft:var(--surface-2);margin:0 0 16px;padding:10px 0 10px 14px;border-left:3px solid var(--sec);border-radius:0 10px 10px 0}
 .sec:last-child{margin-bottom:0}
-.sec-h{font-family:var(--f-body);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 4px}
-.sec[data-type="coro"] .sec-h{color:var(--chord)}
+.sec[data-type="sin"],.sec[data-type="otro"]{border-left-color:transparent;padding-left:0}
+.sec[data-type="verso"]{--sec:var(--ink);--sec-soft:var(--surface-2)}
+.sec[data-type="precoro"]{--sec:var(--info);--sec-soft:var(--info-soft)}
+.sec[data-type="coro"]{--sec:var(--accent);--sec-soft:var(--accent-soft);background:color-mix(in srgb,var(--accent-soft) 55%,transparent);padding-right:12px}
+.sec[data-type="puente"]{--sec:var(--violet);--sec-soft:var(--violet-soft)}
+.sec-h{display:inline-block;font-family:var(--f-body);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--sec);background:var(--sec-soft);font-weight:800;margin:0 0 8px;padding:3px 10px;border-radius:999px}
+.sec[data-type="coro"] .sec-h{background:var(--accent);color:var(--accent-ink)}
+/* Notas de interpretación: color y cursiva se eligen en Ajustes; alineación por nota */
+.note{margin:4px 0;font-family:var(--f-body);font-size:calc(var(--sheet-size,15px) * .95);font-weight:650;font-style:italic;color:var(--note-red)}
+.note[data-align="center"]{text-align:center}
+.note[data-align="right"]{text-align:right}
+pre.sheet .note-in{font-style:italic;color:var(--note-red)}
+html[data-note="blue"] .note,html[data-note="blue"] .note-in{color:var(--accent)}
+html[data-note="gray"] .note,html[data-note="gray"] .note-in{color:var(--muted)}
+html[data-note-italic="0"] .note,html[data-note-italic="0"] .note-in{font-style:normal}
 pre.sheet{font-family:var(--f-mono);font-size:var(--sheet-size,15px);line-height:1.42;margin:0;white-space:pre;color:var(--ink)}
 pre.sheet .c{color:var(--chord);font-weight:700}
 pre.sheet .c.bad{color:var(--warn);text-decoration:underline dotted;text-underline-offset:3px}
@@ -171,6 +188,8 @@ pre.sheet .c.bad{color:var(--warn);text-decoration:underline dotted;text-underli
 .steps .btn{justify-content:center;padding:8px 4px;font-family:var(--f-mono)}
 
 .cols{display:grid;grid-template-columns:1fr;gap:16px}
+.notebar{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}
+.notebar .seg button{font-size:13px;min-height:32px;padding:5px 10px}
 @media (min-width:900px){.cols{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
 .conf{font-size:11.5px;font-weight:600}
@@ -207,6 +226,7 @@ pre.sheet .c.bad{color:var(--warn);text-decoration:underline dotted;text-underli
 .lv-sheet{flex:1;overflow:auto;padding:16px 16px 40px;-webkit-overflow-scrolling:touch}
 .lv-sheet pre.sheet{font-size:var(--live-size,22px)}
 .lv-sheet .sec-h{font-size:12px}
+.lv-sheet .note{font-size:calc(var(--live-size,22px) * .9)}
 .lv-next{margin-top:20px;padding:12px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);font-size:14px}
 .lv-next b{color:var(--chord);font-family:var(--f-mono)}
 .lv-bar{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);background:var(--surface);justify-content:center}
@@ -352,6 +372,12 @@ const SECTION_MAP = [
 ];
 function sectionInfo(w){ for(const [re,type,label] of SECTION_MAP) if(re.test(w)) return {type,label}; return {type:'otro',label:w}; }
 const HEADER_RE = /^\s*[\[(]?\s*(intro(?:ducci[oó]n)?|verso|estr?of?r?a|verse|pre[- ]?coro|precoro|pre[- ]?chorus|coro|chorus|estribillo|refr[aá]n|puente|bridge|interludio|interlude|instrumental|final|outro|ending|coda|tag|vamp)\s*(\d+)?\s*[\])]?\s*(?:[:.\-–]\s*|\s+|$)(.*)$/i;
+/* Notas de interpretación ("Se repite", "x2", "(Todos)"...): se muestran aparte, con su propio estilo y alineación */
+const NOTE_ALIGNS = {nota:'left', 'nota-centro':'center', 'nota-derecha':'right'};
+const NOTE_RE = /^[\s(\[\/*]*(se\s+repite|repite|repetir|repetimos|bis|x\s*\d+|\d+\s*x|\d+\s+veces|(dos|tres|cuatro|cinco)\s+veces|otra\s+vez)\b/i;
+const NOTE_PAREN_RE = /^\(\s*(solo|todos|hombres|mujeres|damas|caballeros|instrumental|a\s*cap+el+a|pausa|rit\.?|ritardando|suave|fuerte|sube|baja|modula)\b[^)]*\)$/i;
+function isNoteText(t){ t = String(t||'').trim(); return !!t && t.length <= 60 && (NOTE_RE.test(t) || NOTE_PAREN_RE.test(t)); }
+function noteDirective(text, align){ return `{${({left:'nota', center:'nota-centro', right:'nota-derecha'})[align] || 'nota'}: ${text}}`; }
 const SEP_RE = /^(\|+:?|:?\|+|\/+|-+|–|—|%|\.{2,}|[()\[\]]+|x\d+|\(x\d+\)|\*+|n\.?c\.?|\(?\d+x\)?)$/i;
 
 function analyzeChordLine(line){
@@ -388,16 +414,17 @@ function convertInline(l){
   lyric += l.slice(last);
   return found ? {chords, lyric} : null;
 }
-function parseSongText(text, {bodyOnly=false, fileName=''} = {}){
+function parseSongText(text, {bodyOnly=false, fileName='', autoNotes=!bodyOnly} = {}){
   const lines = String(text||'').replace(/\r\n?/g,'\n').replace(/ /g,' ').replace(/\t/g,'    ').split('\n').map(l=>l.replace(/\s+$/,''));
   const meta = {title:null, artist:null, key:null, conf:{title:'baja', artist:'baja', key:'baja'}, notes:[]};
   const sections = []; let cur = null, pending = null, seen = false;
   const newSec = (type,label) => { cur = {type, label, lines:[]}; sections.push(cur); };
   const push = (chords, lyric) => { if(!cur) newSec('sin',''); cur.lines.push({chords, lyric}); };
   const flush = () => { if(pending){ push(pending,''); pending = null; } };
+  const pushNote = (txt, align) => { flush(); if(!cur) newSec('sin',''); cur.lines.push({chords:[], lyric:txt, note:align}); seen = true; };
 
   for(let l of lines){
-    const d = /^\s*\{\s*([a-z_]+)\s*(?::\s*(.*?))?\s*\}\s*$/i.exec(l);
+    const d = /^\s*\{\s*([a-z_-]+)\s*(?::\s*(.*?))?\s*\}\s*$/i.exec(l);
     if(d){
       const k = d[1].toLowerCase(), v = (d[2]||'').trim();
       if(k==='title'||k==='t'){ if(!bodyOnly){ meta.title=v; meta.conf.title='alta'; } continue; }
@@ -407,7 +434,8 @@ function parseSongText(text, {bodyOnly=false, fileName=''} = {}){
       if(k==='sov'||k==='start_of_verse'){ flush(); newSec('verso','Verso'); seen=true; continue; }
       if(k==='sob'||k==='start_of_bridge'){ flush(); newSec('puente','Puente'); seen=true; continue; }
       if(/^(eoc|end_of_chorus|eov|end_of_verse|eob|end_of_bridge)$/.test(k)){ flush(); cur=null; continue; }
-      if(k==='c'||k==='comment'||k==='ci') l = v; else continue;
+      if(NOTE_ALIGNS[k]){ if(v) pushNote(v, NOTE_ALIGNS[k]); continue; }
+      if(k==='c'||k==='comment'||k==='ci'){ if(v && !HEADER_RE.test(v)){ pushNote(v, 'left'); continue; } l = v; } else continue;
     }
     const t = l.trim();
     if(!t){
@@ -455,6 +483,7 @@ function parseSongText(text, {bodyOnly=false, fileName=''} = {}){
     }
     const a = analyzeChordLine(l);
     if(a.isChord){ flush(); pending = a.chords; seen = true; continue; }
+    if(autoNotes && isNoteText(t)){ pushNote(t, 'left'); continue; }
     if(!bodyOnly && !meta.title && !seen){ meta.title = t; meta.conf.title = 'media'; continue; }
     if(pending){ push(pending, l); pending = null; } else push([], l);
     seen = true;
@@ -466,7 +495,7 @@ function parseSongText(text, {bodyOnly=false, fileName=''} = {}){
   const allChords = []; let unknown = []; let lyricLines = 0;
   for(const s of secs) for(const ln of s.lines){
     for(const c of [...ln.chords].sort((x,y)=>x.pos-y.pos)){ if(c.ok) allChords.push(c.raw); else unknown.push(c.raw); }
-    if(ln.lyric.trim()) lyricLines++;
+    if(ln.lyric.trim() && !ln.note) lyricLines++;
   }
   if(!meta.key && !bodyOnly){ const e = Music.estimateKey(allChords); if(e){ meta.key = e.key; meta.conf.key = e.conf; } }
   return {meta, sections:secs, stats:{chords:allChords.length, unknown:[...new Set(unknown)], lyricLines}};
@@ -481,6 +510,7 @@ function songToText(song){
   for(const s of song.sections){
     if(s.label) out.push('['+s.label+']');
     for(const ln of s.lines){
+      if(ln.note){ out.push(noteDirective(ln.lyric, ln.note)); continue; }
       if(ln.chords.length) out.push(chordLineStr(ln.chords));
       if(ln.lyric || !ln.chords.length) out.push(ln.lyric);
     }
@@ -505,7 +535,7 @@ function lev(a, b, max){
 function buildIndex(song){
   const lines = [];
   for(const s of song.sections) for(const ln of s.lines){
-    if(!ln.lyric.trim()) continue;
+    if(!ln.lyric.trim() || ln.note) continue;
     const n = normText(ln.lyric);
     lines.push({raw:ln.lyric.trim(), sec:s.label || '', n, wset:new Set(n.split(' '))});
   }
@@ -719,7 +749,7 @@ const dbGet = async (s, id) => (await dbReq(s,'readonly', st => st.get(id))) || 
 /* ================= ESTADO ================= */
 const S = {
   songs:[], setlists:[], index:new Map(),
-  prefs:{id:'prefs', spell:'auto', liveSize:22, livePalette:'dark', perPage:false, seeded:false},
+  prefs:{id:'prefs', spell:'auto', liveSize:22, livePalette:'dark', perPage:false, seeded:false, noteColor:'red', noteItalic:true},
   route:{view:'inicio', params:{}}, stack:[],
   lib:{keys:new Set(), mode:'all', source:'original', fav:false, tag:'', sort:'title', q:''},
   cur:null, live:null, jobs:[], review:null
@@ -728,6 +758,7 @@ const songById = id => S.songs.find(s => s.id === id);
 async function saveSong(s){ s.updatedAt = Date.now(); if(!S.songs.includes(s)) S.songs.push(s); S.index.set(s.id, buildIndex(s)); await dbPut('songs', s); }
 async function saveSetlist(sl){ sl.updatedAt = Date.now(); if(!S.setlists.includes(sl)) S.setlists.push(sl); await dbPut('setlists', sl); }
 async function savePrefs(){ await dbPut('prefs', S.prefs); }
+function applyNotePrefs(){ const r = document.documentElement; r.dataset.note = S.prefs.noteColor || 'red'; r.dataset.noteItalic = S.prefs.noteItalic === false ? '0' : '1'; }
 function flatHint(song){ let f=0, sh=0; for(const s of song.sections) for(const l of s.lines) for(const c of l.chords){ if(/^[A-G]b/.test(c.raw)) f++; if(/^[A-G]#/.test(c.raw)) sh++; } return f > sh; }
 function edgeChords(song){ const all = []; for(const s of song.sections) for(const l of s.lines) for(const c of [...l.chords].sort((a,b)=>a.pos-b.pos)) if(c.ok) all.push(c.raw); return {first:all[0]||null, last:all[all.length-1]||null}; }
 function tr(song, raw, semi, pref){ if(!raw) return '—'; return Music.transposeSym(raw, semi, Music.flatsFor(song.key, semi, pref, flatHint(song)), pref!=='auto'); }
@@ -754,17 +785,24 @@ function chordLineHTML(chords, semi, flats, respell){
   }
   return html;
 }
+/* "(x2)", "(bis)", "(se repite)" dentro de un renglón de letra: mismo estilo que las notas, sin mover la alineación */
+const inlineNotes = h => h.replace(/\((?:\s*x\s*\d+|\s*\d+\s*x|\s*bis|\s*se\s+repite[^)]*|\s*\d+\s+veces|\s*(?:dos|tres|cuatro)\s+veces)\s*\)/gi, m => `<i class="note-in">${m}</i>`);
 function sheetHTML(song, semi, pref){
   if(!hasText(song)) return `<div class="empty">Esta canción todavía no tiene letra ni acordes. Ábrela en <b>Editar</b> para transcribirla viendo el documento original.</div>`;
   const flats = Music.flatsFor(song.key, semi, pref, flatHint(song)), respell = pref !== 'auto';
   return song.sections.map(sec => {
-    const body = sec.lines.map(ln => {
+    /* Las notas ("Se repite"...) van en su propio renglón, fuera del bloque monoespaciado, para poder alinearlas */
+    const parts = []; let buf = [];
+    const close = () => { if(buf.length){ parts.push(`<pre class="sheet">${buf.join('\n')}</pre>`); buf = []; } };
+    for(const ln of sec.lines){
+      if(ln.note){ close(); parts.push(`<p class="note" data-align="${esc(ln.note)}">${esc(ln.lyric)}</p>`); continue; }
       let out = '';
       if(ln.chords.length) out += chordLineHTML(ln.chords, semi, flats, respell) + (ln.lyric ? '\n' : '');
-      if(ln.lyric || !ln.chords.length) out += esc(ln.lyric);
-      return out;
-    }).join('\n');
-    return `<section class="sec" data-type="${esc(sec.type)}">${sec.label ? `<h4 class="sec-h">${esc(sec.label)}</h4>` : ''}<pre class="sheet">${body}</pre></section>`;
+      if(ln.lyric || !ln.chords.length) out += inlineNotes(esc(ln.lyric));
+      buf.push(out);
+    }
+    close();
+    return `<section class="sec" data-type="${esc(sec.type)}">${sec.label ? `<h4 class="sec-h">${esc(sec.label)}</h4>` : ''}${parts.join('')}</section>`;
   }).join('');
 }
 
@@ -1013,7 +1051,10 @@ VIEWS.revisar = () => {
     <div class="field"><label for="rv-tags">Etiquetas o carpetas</label><input class="inp" id="rv-tags" value="${esc((s.tags||[]).join(', '))}" placeholder="adoración, júbilo, Navidad"></div>
   </div></section>
   <div class="cols">
-    <div class="field"><label for="rv-text">Letra y acordes (los acordes van en la línea de arriba; las secciones entre corchetes)</label><textarea class="inp" id="rv-text" spellcheck="false">${esc(text)}</textarea></div>
+    <div class="field"><label for="rv-text">Letra y acordes (los acordes van en la línea de arriba; las secciones entre corchetes)</label>
+      <div class="notebar"><span class="small muted">Poner la línea donde está el cursor como nota:</span>
+        <div class="row"><div class="seg">${[['left','⟵ Izquierda'],['center','Centro'],['right','Derecha ⟶']].map(([v,l])=>`<button data-act="noteLine" data-v="${v}">${l}</button>`).join('')}</div><button class="btn sm" data-act="noteLine" data-v="none">Quitar nota</button><button class="btn sm" data-act="autoNotes">Buscar “Se repite”, “x2”…</button></div></div>
+      <textarea class="inp" id="rv-text" spellcheck="false">${esc(text)}</textarea></div>
     <div class="field"><label>Vista previa</label><div id="rv-stats"></div><div class="sheetwrap" id="rv-prev"></div></div>
   </div>
   <div class="row"><button class="btn danger" data-act="discardReview">Descartar esta canción</button>${R.queue.length>1?`<button class="btn ghost" data-act="skipReview">Revisar después</button>`:''}</div>`;
@@ -1033,6 +1074,12 @@ VIEWS.ajustes = () => `
   <section class="card"><h3>Escritura de acordes por defecto</h3>
     <div class="seg">${[['auto','Según la tonalidad'],['sharp','Sostenidos ♯'],['flat','Bemoles ♭']].map(([v,l])=>`<button data-act="prefSpell" data-v="${v}" aria-pressed="${S.prefs.spell===v}">${l}</button>`).join('')}</div>
     <p class="muted small">“Según la tonalidad” usa bemoles en F, B♭, E♭, A♭, D♭ y sus relativas menores, y sostenidos en el resto.</p></section>
+  <section class="card"><h3>Notas en las canciones</h3>
+    <p class="small">Frases como “Se repite”, “x2” o “(Todos)” se muestran distinto de la letra para que no se canten por error.</p>
+    <div class="sheetwrap" style="padding:10px 14px"><pre class="sheet">me quiero mover <i class="note-in">(x2)</i></pre><p class="note" data-align="right">Se repite el coro</p></div>
+    <div class="seg">${[['red','Rojo'],['blue','Azul'],['gray','Gris']].map(([v,l])=>`<button data-act="prefNoteColor" data-v="${v}" aria-pressed="${(S.prefs.noteColor||'red')===v}">${l}</button>`).join('')}</div>
+    <div class="seg">${[[true,'Cursiva'],[false,'Normal']].map(([v,l])=>`<button data-act="prefNoteItalic" data-v="${v?1:0}" aria-pressed="${(S.prefs.noteItalic!==false)===v}">${l}</button>`).join('')}</div>
+    <p class="muted small">Para marcar una frase como nota y elegir si va a la izquierda, al centro o a la derecha, abre la canción en <b>Editar</b>.</p></section>
   <section class="card"><h3>Modo en vivo</h3>
     <div class="row"><span class="small">Tamaño de letra</span><button class="btn sm" data-act="prefSize" data-d="-2">A−</button><b class="tnum">${S.prefs.liveSize}px</b><button class="btn sm" data-act="prefSize" data-d="2">A+</button></div>
     <div class="seg">${[['dark','Pantalla oscura'],['light','Pantalla clara']].map(([v,l])=>`<button data-act="prefPal" data-v="${v}" aria-pressed="${S.prefs.livePalette===v}">${l}</button>`).join('')}</div></section>
@@ -1176,6 +1223,27 @@ async function openOriginal(fileId){
       const d = document.createElement('div'); d.className = 'docview'; d.innerHTML = r.value; d.querySelectorAll('script,iframe,object,embed').forEach(n=>n.remove()); body.innerHTML = ''; body.appendChild(d);
     } else { body.innerHTML = `<pre class="sheet">${esc(await f.blob.text())}</pre>`; }
   }catch(e){ body.innerHTML = `<p>No se pudo mostrar el original: ${esc(e.message||'')}</p>`; }
+}
+
+/* Editor: convierte en nota (o vuelve a letra) los renglones que toca la selección */
+function markNoteLines(align){
+  const ta = $('#rv-text'); if(!ta) return;
+  const v = ta.value, a = ta.selectionStart, z = Math.max(ta.selectionEnd, a);
+  const from = v.lastIndexOf('\n', a - 1) + 1, toNl = v.indexOf('\n', z === a ? z : z - 1), to = toNl < 0 ? v.length : toNl;
+  let changed = 0;
+  const lines = v.slice(from, to).split('\n').map(l => {
+    const m = /^\s*\{\s*(nota(?:-centro|-derecha)?|c|comment|ci)\s*:\s*(.*?)\s*\}\s*$/i.exec(l);
+    const txt = m ? m[2] : l.trim();
+    if(!txt) return l;
+    if(!m && analyzeChordLine(l).isChord) return l;
+    changed++;
+    return align === 'none' ? txt : noteDirective(txt, align);
+  });
+  if(!changed){ toast(align === 'none' ? 'Esa línea no es una nota' : 'Pon el cursor en la línea de la frase (no en una línea de acordes)'); return; }
+  const out = lines.join('\n');
+  ta.value = v.slice(0, from) + out + v.slice(to);
+  ta.focus(); ta.setSelectionRange(from, from + out.length);
+  updateReviewPreview();
 }
 
 /* ================= COPIA DE SEGURIDAD ================= */
@@ -1343,6 +1411,10 @@ const ACT = {
   prefSpell(b){ S.prefs.spell = b.dataset.v; savePrefs(); render(); },
   prefSize(b){ S.prefs.liveSize = Math.min(40, Math.max(14, S.prefs.liveSize + (+b.dataset.d))); savePrefs(); render(); },
   prefPal(b){ S.prefs.livePalette = b.dataset.v; savePrefs(); render(); },
+  prefNoteColor(b){ S.prefs.noteColor = b.dataset.v; applyNotePrefs(); savePrefs(); render(); },
+  prefNoteItalic(b){ S.prefs.noteItalic = b.dataset.v === '1'; applyNotePrefs(); savePrefs(); render(); },
+  noteLine(b){ markNoteLines(b.dataset.v); },
+  autoNotes(){ const ta = $('#rv-text'); let n = 0; ta.value = ta.value.split('\n').map(l => { if(/^\s*\{/.test(l) || !isNoteText(l)) return l; n++; return noteDirective(l.trim(), 'left'); }).join('\n'); updateReviewPreview(); toast(n ? `${n} ${n===1?'frase marcada':'frases marcadas'} como nota` : 'No encontré frases como “Se repite” o “x2”'); },
   async exportBackup(b){
     b.disabled = true; const t = b.textContent; b.textContent = 'Preparando…';
     try{
@@ -1418,7 +1490,8 @@ renueva mis fuerzas, yo vivo por ti;
 G        A           Bm    G
 cada mañana tu fidelidad
 Em              A          D
-me sostiene y me lleva a tu paz.`},
+me sostiene y me lleva a tu paz.
+{nota-derecha: Se repite el coro}`},
   {title:'Refugio', text:`Tono: Em
 [Verso]
 Em             C
@@ -1477,6 +1550,7 @@ async function seedExamples(){
   const [songs, sets, prefs] = await Promise.all([dbAll('songs'), dbAll('setlists'), dbAll('prefs')]);
   S.songs = songs; S.setlists = sets; if(prefs[0]) Object.assign(S.prefs, prefs[0]);
   for(const s of S.songs) S.index.set(s.id, buildIndex(s));
+  applyNotePrefs();
   if(!S.prefs.seeded && !S.songs.length){ await seedExamples(); S.prefs.seeded = true; await savePrefs(); }
   render();
 })();
