@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path');
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const eng = html.slice(html.indexOf('/*ENGINE-START*/'), html.indexOf('/*ENGINE-END*/'));
-eval(eng + ';globalThis.E={Music,parseSongText,songToText,itemsToText,searchIndex,buildIndex,checkBackup,planRestore,isNoteText,matchKey,respellSections,transitionOptions,keyRelation,rankByKey}');
+eval(eng + ';globalThis.E={Music,parseSongText,songToText,itemsToText,searchIndex,buildIndex,checkBackup,planRestore,isNoteText,matchKey,respellSections,transitionOptions,keyRelation,rankByKey,PROGRESSIONS,progressionIn,romanOf,voiceLead,chordTones}');
 const {Music} = E; let fail = 0;
 const eq = (a, b, m) => { if (JSON.stringify(a) !== JSON.stringify(b)) { fail++; console.log('FALLA', m, JSON.stringify(a), '≠', JSON.stringify(b)); } else console.log('ok  ', m); };
 const T = (c, s, k) => Music.transposeSym(c, s, Music.flatsFor(k, s, 'auto'), false);
@@ -29,6 +29,27 @@ eq(ps.sections.map(x => [x.type, x.label]), [['verso','Verso 1'],['interludio','
 eq(ps.sections[1].lines[0].chords.map(c => c.raw), ['C','G','Am','F'], 'los acordes del intermedio quedan dentro de su sección');
 eq(E.parseSongText(E.songToText({sections:ps.sections}), {bodyOnly:true}).sections.map(x => x.label), ps.sections.map(x => x.label), 'los títulos se conservan al editar');
 eq(E.parseSongText('[G]Hola [D]mundo', {bodyOnly:true}).sections[0].lines[0].chords.length, 2, 'ChordPro [G]palabra sigue funcionando');
+/* Fase 5: acompañamiento */
+const K5 = (i, minor=false) => ({i, minor});
+const PR = id => E.PROGRESSIONS.find(p => p.id === id);
+eq(E.progressionIn(PR('pop'), K5(0)).chords, ['C','G','Am','F'], 'C – G – Am – F (ejemplo de la especificación)');
+eq(E.progressionIn(PR('pop'), K5(7)).chords, ['G','D','Em','C'], 'G – D – Em – C (ejemplo de la especificación)');
+eq(E.progressionIn(PR('mpop'), K5(4,true)).chords, ['Em','C','G','D'], 'Em – C – G – D (ejemplo de la especificación)');
+eq(E.progressionIn(PR('mpop'), K5(2,true)).chords, ['Dm','Bb','F','C'], 'Dm – B♭ – F – C (escribe Bb, no A#)');
+eq(E.progressionIn(PR('mpop'), K5(9,true)).chords, ['Am','F','C','G'], 'Am – F – C – G (ejemplo de la especificación)');
+eq(E.progressionIn(PR('bajo7'), K5(0)).roman, ['I','V/B','vi','IV'], 'grados en números romanos con bajo');
+eq(E.progressionIn(PR('iiVI'), K5(3)).chords, ['Fm7','Bb7','Ebmaj7','Ebmaj7'], 'ii–V–I en Eb escrito con bemoles');
+eq(E.romanOf('Bm7b5', K5(0)), 'viiø', 'semidisminuido');
+eq(E.romanOf('Bb', K5(0)), 'bVII', 'acorde prestado bVII');
+eq(E.romanOf('E', K5(9,true)), 'V', 'V mayor en menor');
+eq(E.chordTones('Am9').tones, [0,3,7,10,2], 'notas de Am9');
+const vl = E.voiceLead(['C','G/B','Am','F']);
+eq(vl.every(v => v.rh.length === 3 && v.rh[0] >= 60 && v.rh[2] <= 81), true, 'mano derecha: 3 notas en el registro medio');
+eq(vl.slice(1).every((v, i) => v.rh.reduce((n, x, k) => n + Math.abs(x - vl[i].rh[k]), 0) <= 5), true, 'inversiones cercanas: los dedos casi no se mueven');
+eq(vl.map(v => v.lh % 12), [0, 11, 9, 5], 'mano izquierda toca el bajo (B en G/B)');
+eq(E.PROGRESSIONS.every(p => p.chords.split(' ').every(c => E.chordTones(c))), true, 'todas las progresiones usan acordes válidos');
+for(const k of [0,1,3,6,8,11]) for(const pr of E.PROGRESSIONS){ const r = E.progressionIn(pr, K5(k, pr.minor)); if(r.chords.some(c => /E#|B#|Cb|Fb|##|bb/.test(c))) { fail++; console.log('FALLA escritura rara', pr.id, k, r.chords); } }
+console.log('ok   ninguna progresión en ningún tono usa escrituras raras (E#, Cb…)');
 /* Fase 4: transiciones */
 const K = (i, minor=false) => ({i, minor});
 const to = (a, b) => E.transitionOptions(a, b).map(o => [o.id, o.chords.join(' ')]);

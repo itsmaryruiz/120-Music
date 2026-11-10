@@ -6,7 +6,7 @@ La especificación completa que escribió la dueña del proyecto está en `docs/
 
 ## Estado actual
 
-Están hechas las fases 1, 2, 3 y 4 del plan de `docs/PROMPT_ORIGINAL.md`, todas funcionales:
+Están hechas las fases 1 a 5 del plan de `docs/PROMPT_ORIGINAL.md`, todas funcionales:
 
 - **Fase 1 · Biblioteca e importación**
   - Importa PDF digital, Word .docx y texto o ChordPro.
@@ -30,6 +30,11 @@ Están hechas las fases 1, 2, 3 y 4 del plan de `docs/PROMPT_ORIGINAL.md`, todas
   - Entradas: botón en Servicios, en Inicio, "Conectar con otra" en cada canción y "Sugerir transición" entre canciones de una lista.
   - **En Servicios:** "Tono común" pone todas en un tono (menores en la relativa). Cada canción muestra la progresión del coro y sus secciones. Entre canciones: cómo sale y entra, la relación de tonos y la transición guardada (editable; avisa si luego cambió un tono). La transición se ve en el modo en vivo antes de la siguiente.
   - Motor: `keyRelation`, `transitionOptions`, `rankByKey`, `diatonic` (sección CONEXIÓN DE CANCIONES).
+- **Fase 5 · Improvisación** (pestaña "Improvisar", vista `acompanar`, estado `S.acc` guardado en `Prefs.acc`)
+  - La dueña pidió que se llame **Improvisación**, no "Prédica y ministración". Reemplazó a la pestaña "Buscar" (la búsqueda sigue en Inicio).
+  - Se elige momento (prédica, oración, clamor…), tonalidad (12 tonos, mayor o menor), nivel y estilo. El momento da ideas de cómo tocar y ordena las progresiones; nunca se etiqueta una progresión como "la correcta" para un momento espiritual.
+  - Biblioteca `PROGRESSIONS` (escritas en C o Am, se transportan con `progressionIn`): acordes, grados en romanos (`romanOf`), tecladito por acorde con mano derecha (azul) y bajo (violeta), inversiones cercanas (`voiceLead`), variaciones, alternativas que comparten acordes, ±½ por progresión y "Ver en grande" (paso a paso).
+  - Pendiente según la especificación: escuchar ejemplos (MIDI) y cambiar el tempo.
 - **Notas de interpretación y secciones**
   - Frases como "Se repite", "x2", "(Todos)" son *notas*: renglón aparte, en rojo y cursiva (color rojo/azul/gris y cursiva se cambian en Ajustes), alineadas a la izquierda, al centro o a la derecha.
   - Se detectan solas al importar (`isNoteText`). En el editor hay botones para marcar la línea del cursor como nota (izquierda, centro, derecha), quitarla, o buscar frases de repetición. "(x2)", "(bis)" dentro de un renglón de letra se pintan igual sin moverlo.
@@ -42,7 +47,6 @@ Están hechas las fases 1, 2, 3 y 4 del plan de `docs/PROMPT_ORIGINAL.md`, todas
   - Ajustes avisa si nunca se hizo copia o si hay cambios después de la última.
 
 **Pendiente**
-- **Fase 5:** acompañamiento para prédicas y biblioteca de progresiones.
 - **Fase 6:** sincronización, colaboración en equipo, voz, pedal Bluetooth y audio.
 - **OCR** para PDF escaneados: la dueña **no lo quiere por ahora** (solo PDF digitales). Si algún día se hace, que sea gratis y local (tesseract.js).
 
@@ -84,7 +88,7 @@ Song = { id, title, artist, key:{i:0-11, minor:bool}|null,
   createdAt, updatedAt, lastOpened, isExample?, meta:{notes:[]} }
 SourceFile = { id, name, ext, size, blob, addedAt, status }
 Setlist = { id, name, date:'YYYY-MM-DD', type, items:[{songId, key, notes, link, transition?:{text, name, from, to}}], isExample? }
-Prefs = { id:'prefs', spell:'auto'|'sharp'|'flat', liveSize, livePalette:'dark'|'light', perPage, seeded, lastBackup?, noteColor:'red'|'blue'|'gray', noteItalic }
+Prefs = { id:'prefs', spell:'auto'|'sharp'|'flat', liveSize, livePalette:'dark'|'light', perPage, seeded, lastBackup?, noteColor:'red'|'blue'|'gray', noteItalic, acc?:{key, moment, level, style} }
 Backup = { app:'120 Worship' (también se aceptan copias con '120 Music'), version:1, exportedAt, songs:[Song], setlists:[Setlist], files:[{...SourceFile sin blob, type, data:base64}] }
 ```
 
@@ -131,7 +135,7 @@ Se probó con un PDF real de la usuaria, "Suelto" de Sarai Rivera. El archivo no
 
 ## Próximos pasos sugeridos
 
-1. **Fase 5:** acompañamiento para prédicas, con progresiones transportables y guía de mano izquierda y mano derecha.
+1. **Escuchar las progresiones** (Web Audio, sin internet) y cambiar el tempo, como pide la especificación para una fase posterior.
 2. **OCR (en pausa, la dueña no lo quiere por ahora):** tesseract.js con los archivos dentro del repositorio.
 3. **Librerías locales (opcional):** copiar pdf.js y mammoth a `vendor/` para no depender de cdnjs.
 
