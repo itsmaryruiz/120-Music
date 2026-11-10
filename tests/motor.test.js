@@ -24,8 +24,9 @@ const ix = new Map([['x', E.buildIndex(song)]]);
 const r = E.searchIndex([song], ix, 'segunda linea del berso');
 eq(r.length ? ix.get('x').lines[r[0].hits[0].k].raw : null, 'segunda línea del verso', 'búsqueda tolera acentos y errores');
 /* Copia de seguridad */
-const bk = (o) => ({app:'120 Music', version:1, exportedAt:1, songs:[], setlists:[], files:[], ...o});
+const bk = (o) => ({app:'120 Worship', version:1, exportedAt:1, songs:[], setlists:[], files:[], ...o});
 eq(E.checkBackup(bk({})), null, 'copia válida');
+eq(E.checkBackup(bk({app:'120 Music'})), null, 'acepta copias hechas con el nombre anterior');
 eq(!!E.checkBackup({app:'Otra', version:1}), true, 'rechaza archivo que no es copia');
 eq(!!E.checkBackup(bk({version:99})), true, 'rechaza copia de una versión más nueva');
 eq(!!E.checkBackup(bk({songs:[{title:'sin id'}]})), true, 'rechaza canciones dañadas');

@@ -1,4 +1,4 @@
-# 120 Music
+# 120 Worship
 
 Aplicación web instalable (PWA) para tecladistas, pianistas y equipos de alabanza de iglesias. Sirve para encontrar canciones por frases de la letra, transportarlas a cualquier tono, filtrarlas por tonalidad, prepararlas por servicio y tocarlas en un modo en vivo.
 
@@ -22,7 +22,7 @@ Están hechas las fases 1, 2 y 3 del plan de `docs/PROMPT_ORIGINAL.md`, todas fu
   - Modo en vivo con pantalla oscura, botones grandes, bloqueo contra toques accidentales, búsqueda rápida y navegación por la lista.
   - Al transportar se conserva la posición de lectura y la pantalla no se apaga.
 - **Copia de seguridad** (en Ajustes)
-  - Exporta canciones, listas y documentos originales en un solo `.json` (`120-music-copia-AAAA-MM-DD.json`). En iPhone se guarda con la hoja de compartir ("Guardar en Archivos"); en computadora se descarga.
+  - Exporta canciones, listas y documentos originales en un solo `.json` (`120-worship-copia-AAAA-MM-DD.json`). En iPhone se guarda con la hoja de compartir ("Guardar en Archivos"); en computadora se descarga.
   - Restaurar nunca borra: agrega lo que falta, reemplaza una canción o lista solo si la de la copia es más reciente (`updatedAt`) y nunca sobrescribe un documento original. Antes de restaurar muestra un resumen.
   - Ajustes avisa si nunca se hizo copia o si hay cambios después de la última.
 
@@ -71,7 +71,7 @@ Song = { id, title, artist, key:{i:0-11, minor:bool}|null,
 SourceFile = { id, name, ext, size, blob, addedAt, status }
 Setlist = { id, name, date:'YYYY-MM-DD', type, items:[{songId, key, notes, link}], isExample? }
 Prefs = { id:'prefs', spell:'auto'|'sharp'|'flat', liveSize, livePalette:'dark'|'light', perPage, seeded, lastBackup? }
-Backup = { app:'120 Music', version:1, exportedAt, songs:[Song], setlists:[Setlist], files:[{...SourceFile sin blob, type, data:base64}] }
+Backup = { app:'120 Worship' (también se aceptan copias con '120 Music'), version:1, exportedAt, songs:[Song], setlists:[Setlist], files:[{...SourceFile sin blob, type, data:base64}] }
 ```
 
 - `chords[].pos` es la columna del acorde sobre la letra.
@@ -89,10 +89,10 @@ Backup = { app:'120 Music', version:1, exportedAt, songs:[Song], setlists:[Setli
 
 ## Decisiones tomadas
 
-- **Nombre: 120 Music.** Aparece en `<title>`, `const APP_NAME`, la marca de la barra lateral (`.brand`), `apple-mobile-web-app-title` y `manifest.webmanifest`. La base de IndexedDB se sigue llamando `app-alabanza` a propósito: cambiarla haría que los teléfonos pierdan las canciones guardadas.
+- **Nombre: 120 Worship** (antes "120 Music"; el repositorio y el enlace siguen siendo `120-Music`). Aparece en `<title>`, `const APP_NAME`, la marca de la barra lateral (`.brand`), `apple-mobile-web-app-title` y `manifest.webmanifest`. La base de IndexedDB se sigue llamando `app-alabanza` a propósito: cambiarla haría que los teléfonos pierdan las canciones guardadas.
 - **Publicada en GitHub Pages:** https://itsmaryruiz.github.io/120-Music/ (repositorio público `itsmaryruiz/120-Music`, rama `main`, carpeta raíz).
   - **Cómo se publica una actualización:** Claude hace el commit en esta carpeta y la dueña toca **Push origin** en GitHub Desktop (ella maneja la sesión de GitHub; no hay `gh` instalado). Antes de cada publicación hay que subir `VERSION` en `sw.js`.
-- **Diseño:** tipografía Plus Jakarta Sans (Google Fonts) para títulos y texto; JetBrains Mono solo en hojas de acordes y tonos, porque la alineación acorde-sílaba necesita letra monoespaciada. Color principal azul (`--accent` #2563eb en claro, #5b8cff en oscuro). Los colores viven como variables en `:root`; el modo en vivo tiene su propia paleta en `.live`. Ícono: logo "120 Worship" en azul (#2563eb) sobre fondo blanco (`icons/`; `icon-maskable-512.png` tiene más margen para Android).
+- **Diseño:** tipografía Plus Jakarta Sans (Google Fonts) para títulos y texto; JetBrains Mono solo en hojas de acordes y tonos, porque la alineación acorde-sílaba necesita letra monoespaciada. Color principal azul (`--accent` #2563eb en claro, #5b8cff en oscuro). Los colores viven como variables en `:root`; el modo en vivo tiene su propia paleta en `.live`. Logo e ícono: "120 Worship" en azul (#2563eb) sobre fondo blanco (`icons/`; `icon-maskable-512.png` tiene más margen para Android).
 - **App web en vez de Flutter.** La versión actual es una PWA que se publica en **GitHub Pages** y se agrega a la pantalla de inicio del iPhone (Compartir → Agregar a pantalla de inicio). El motor está separado para poder portarlo a Flutter + SQLite si algún día se quiere una app de tienda.
 - **Datos locales por dispositivo.** En iPhone, la app instalada en la pantalla de inicio y Safari tienen almacenamiento **separado**. Hay que usar siempre la app instalada.
 - **Sin conexión.** `sw.js` guarda en caché la app, las librerías de cdnjs y las fuentes. **Cada vez que se publique un cambio en index.html, hay que subir el valor de `VERSION` en sw.js** (por ejemplo alabanza-v2 → alabanza-v3) para que los teléfonos reciban la versión nueva.
