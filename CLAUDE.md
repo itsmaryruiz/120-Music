@@ -38,7 +38,7 @@ Están hechas las fases 1, 2 y 3 del plan de `docs/PROMPT_ORIGINAL.md`, todas fu
 index.html             Toda la app: HTML + CSS + JS, sin paso de compilación
 manifest.webmanifest   Nombre, ícono y colores para instalarla en el teléfono
 sw.js                  Service worker: funcionamiento sin conexión
-icons/                 Íconos 192, 512 y apple-touch-icon (180)
+icons/                 Íconos 192, 512, maskable, apple-touch-icon (180) y logo.png
 tests/motor.test.js    Pruebas del motor (ejecutar: node tests/motor.test.js)
 docs/PROMPT_ORIGINAL.md  Especificación completa del proyecto
 ```
@@ -92,7 +92,7 @@ Backup = { app:'120 Worship' (también se aceptan copias con '120 Music'), versi
 - **Nombre: 120 Worship** (antes "120 Music"; el repositorio y el enlace siguen siendo `120-Music`). Aparece en `<title>`, `const APP_NAME`, la marca de la barra lateral (`.brand`), `apple-mobile-web-app-title` y `manifest.webmanifest`. La base de IndexedDB se sigue llamando `app-alabanza` a propósito: cambiarla haría que los teléfonos pierdan las canciones guardadas.
 - **Publicada en GitHub Pages:** https://itsmaryruiz.github.io/120-Music/ (repositorio público `itsmaryruiz/120-Music`, rama `main`, carpeta raíz).
   - **Cómo se publica una actualización:** Claude hace el commit en esta carpeta y la dueña toca **Push origin** en GitHub Desktop (ella maneja la sesión de GitHub; no hay `gh` instalado). Antes de cada publicación hay que subir `VERSION` en `sw.js`.
-- **Diseño:** tipografía Plus Jakarta Sans (Google Fonts) para títulos y texto; JetBrains Mono solo en hojas de acordes y tonos, porque la alineación acorde-sílaba necesita letra monoespaciada. Color principal azul (`--accent` #2563eb en claro, #5b8cff en oscuro). Los colores viven como variables en `:root`; el modo en vivo tiene su propia paleta en `.live`. Logo e ícono: "120 Worship" en azul (#2563eb) sobre fondo blanco (`icons/`; `icon-maskable-512.png` tiene más margen para Android).
+- **Diseño:** tipografía Plus Jakarta Sans (Google Fonts) para títulos y texto; JetBrains Mono solo en hojas de acordes y tonos, porque la alineación acorde-sílaba necesita letra monoespaciada. Color principal azul (`--accent` #2563eb en claro, #5b8cff en oscuro). Los colores viven como variables en `:root`; el modo en vivo tiene su propia paleta en `.live`. Ícono: logo "120 Worship" en azul (#2563eb) sobre fondo blanco (`icons/`; `icon-maskable-512.png` tiene más margen para Android). Dentro de la app, `icons/logo.png` (negro sobre transparente, recortado) se muestra con `.logo` como máscara CSS pintada con `--accent`: en el inicio (teléfono) y en la barra lateral (computadora).
 - **App web en vez de Flutter.** La versión actual es una PWA que se publica en **GitHub Pages** y se agrega a la pantalla de inicio del iPhone (Compartir → Agregar a pantalla de inicio). El motor está separado para poder portarlo a Flutter + SQLite si algún día se quiere una app de tienda.
 - **Datos locales por dispositivo.** En iPhone, la app instalada en la pantalla de inicio y Safari tienen almacenamiento **separado**. Hay que usar siempre la app instalada.
 - **Sin conexión.** `sw.js` guarda en caché la app, las librerías de cdnjs y las fuentes. **Cada vez que se publique un cambio en index.html, hay que subir el valor de `VERSION` en sw.js** (por ejemplo alabanza-v2 → alabanza-v3) para que los teléfonos reciban la versión nueva.

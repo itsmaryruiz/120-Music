@@ -75,14 +75,19 @@ p{margin:0}
 .nav button{background:none;border:0;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;border-radius:12px;color:var(--muted);font-size:11px;font-weight:600}
 .nav button[aria-current="page"]{color:var(--accent);background:var(--accent-soft)}
 .nav .brand{display:none}
+/* Logo: el archivo es negro sobre transparente; se pinta con el color de la app (se adapta a modo claro y oscuro) */
+.logo{--h:52px;display:block;flex:none;height:var(--h);width:calc(var(--h) * 833 / 479);background:var(--accent);-webkit-mask:url(icons/logo.png) center/contain no-repeat;mask:url(icons/logo.png) center/contain no-repeat}
+.home-logo{margin-bottom:-8px}
 .ico svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round;display:block}
 main{padding:20px 16px 110px;max-width:980px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:22px;min-width:0}
 @media (min-width:900px){
   .app{grid-template-columns:200px 1fr}
   .nav{position:sticky;top:0;height:100vh;height:100dvh;bottom:auto;display:flex;flex-direction:column;gap:2px;border-top:0;border-right:1px solid var(--line);padding:18px 10px}
   .nav button{flex-direction:row;gap:10px;font-size:14.5px;padding:10px 12px;justify-content:flex-start}
-  .nav .brand{display:block;font-family:var(--f-display);font-weight:800;font-size:22px;padding:4px 12px 16px;letter-spacing:-.02em;color:var(--accent)}
-  .nav .brand span{display:block;font-family:var(--f-body);font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  .nav .brand{display:block;padding:6px 12px 18px}
+  .nav .brand .logo{--h:58px}
+  .home-logo{display:none}
+  .nav .brand span:not(.logo){display:block;margin-top:8px;font-family:var(--f-body);font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
   main{padding:32px 32px 60px}
 }
 
@@ -221,7 +226,7 @@ details summary{cursor:pointer;font-weight:650}
 
 <div class="app">
   <nav class="nav" id="nav" aria-label="Secciones">
-    <div class="brand">120 Worship<span>Repertorio</span></div>
+    <div class="brand"><span class="logo" role="img" aria-label="120 Worship"></span><span>Repertorio</span></div>
     <button data-tab="inicio"><span class="ico"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 9.5V20h12V9.5"/></svg></span>Inicio</button>
     <button data-tab="biblioteca"><span class="ico"><svg viewBox="0 0 24 24"><path d="M5 3h10l4 4v14H5z"/><path d="M15 3v4h4"/><path d="M8 12h8M8 16h5"/></svg></span>Biblioteca</button>
     <button data-tab="buscar"><span class="ico"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M16 16l4.5 4.5"/></svg></span>Buscar</button>
@@ -793,7 +798,8 @@ VIEWS.inicio = () => {
   const pend = S.songs.filter(s=>s.status!=='ok' && !s.isExample);
   const sl = currentSetlist();
   return `
-  <header class="ph"><div><p class="eyebrow">${APP_NAME} · ${S.songs.length} canciones</p><h1>¿Qué canción necesitas?</h1></div></header>
+  <span class="logo home-logo" role="img" aria-label="${APP_NAME}"></span>
+  <header class="ph"><div><p class="eyebrow">${pl(S.songs.length,'canción','canciones')}</p><h1>¿Qué canción necesitas?</h1></div></header>
   <label class="bigsearch"><span class="ico"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M16 16l4.5 4.5"/></svg></span>
     <input id="homeq" type="search" placeholder="Escribe una frase del coro, un título o un artista" autocomplete="off" aria-label="Buscar canción"></label>
   ${pend.length ? `<div class="callout"><p>${pend.length} ${pend.length===1?'canción importada necesita':'canciones importadas necesitan'} revisión antes de confiar en sus acordes.</p><button class="btn sm" data-act="reviewPending">Revisar ahora</button></div>` : ''}
