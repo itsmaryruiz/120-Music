@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path');
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const eng = html.slice(html.indexOf('/*ENGINE-START*/'), html.indexOf('/*ENGINE-END*/'));
-eval(eng + ';globalThis.E={Music,parseSongText,songToText,itemsToText,searchIndex,buildIndex,checkBackup,planRestore,isNoteText,matchKey,respellSections,transitionOptions,keyRelation,rankByKey,PROGRESSIONS,progressionIn,romanOf,voiceLead,chordTones,barEvents,keyFamily}');
+eval(eng + ';globalThis.E={Music,parseSongText,songToText,itemsToText,searchIndex,buildIndex,checkBackup,planRestore,isNoteText,matchKey,respellSections,transitionOptions,keyRelation,rankByKey,PROGRESSIONS,progressionIn,romanOf,voiceLead,chordTones,barEvents,keyFamily,scaleOf,keySignature,COF}');
 const {Music} = E; let fail = 0;
 const eq = (a, b, m) => { if (JSON.stringify(a) !== JSON.stringify(b)) { fail++; console.log('FALLA', m, JSON.stringify(a), '≠', JSON.stringify(b)); } else console.log('ok  ', m); };
 const T = (c, s, k) => Music.transposeSym(c, s, Music.flatsFor(k, s, 'auto'), false);
@@ -64,6 +64,16 @@ eq(E.keyFamily({i:3,minor:false}).chords.map(c => c.name), ['Eb','Fm','Gm','Ab',
 eq(E.keyFamily({i:0,minor:false}).borrowed.map(c => c.name), ['Bb','E','D','Fm'], 'prestados en C: Bb, E, D, Fm');
 eq(E.keyFamily({i:6,minor:false}).borrowed.map(c => c.name), ['E','A#','G#','Bm'], 'prestados en F#');
 eq(E.keyFamily({i:0,minor:false}).progs[0], {nums:'1 5 6 4', chords:['C','G','Am','F']}, 'progresión 1-5-6-4 en C');
+/* Círculo de quintas */
+eq(E.scaleOf({i:0,minor:false}), ['C','D','E','F','G','A','B'], 'escala de C');
+eq(E.scaleOf({i:7,minor:false}), ['G','A','B','C','D','E','F#'], 'escala de G (con F#)');
+eq(E.scaleOf({i:5,minor:false}), ['F','G','A','Bb','C','D','E'], 'escala de F (con Bb)');
+eq(E.scaleOf({i:9,minor:true}), ['A','B','C','D','E','F','G'], 'escala de Am (mismas notas que C)');
+eq(E.scaleOf({i:2,minor:true}), ['D','E','F','G','A','Bb','C'], 'escala de Dm');
+eq(E.keySignature({i:7,minor:false}), {n:1, acc:'#', notes:['F#']}, 'G tiene 1 sostenido: F#');
+eq(E.keySignature({i:3,minor:false}), {n:3, acc:'b', notes:['Bb','Eb','Ab']}, 'Eb tiene 3 bemoles');
+eq(E.keySignature({i:4,minor:true}).n, 1, 'Em tiene la armadura de G');
+eq(E.COF.map(i => Music.keyName({i,minor:false},'auto')).join(' '), 'C G D A E B F# Db Ab Eb Bb F', 'orden del círculo de quintas');
 /* Fase 4: transiciones */
 const K = (i, minor=false) => ({i, minor});
 const to = (a, b) => E.transitionOptions(a, b).map(o => [o.id, o.chords.join(' ')]);

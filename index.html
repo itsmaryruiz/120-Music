@@ -239,6 +239,21 @@ pre.sheet .c.bad{color:var(--warn);text-decoration:underline dotted;text-underli
 .fam-sel .piano{max-width:340px}
 .fam-progs{display:grid;gap:4px;font-size:15px}
 .lv-panel .fam{font-family:var(--f-body)}
+/* Círculo de quintas */
+.cofwrap{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.cof{width:100%;max-width:340px;display:block;margin:2px auto 6px}
+.cof-seg path{fill:var(--surface-2);stroke:var(--surface);stroke-width:2}
+.cof-seg.mi path{fill:color-mix(in srgb,var(--surface-2) 45%,var(--surface))}
+.cof-seg.win path{fill:var(--accent-soft)}
+.cof-seg.sel path{fill:var(--accent)}
+.cof-seg text{font-family:var(--f-mono);font-weight:700;font-size:15px;fill:var(--ink);text-anchor:middle}
+.cof-seg.mi text{font-size:11.5px}
+.cof-seg .n{font-family:var(--f-body);font-size:10.5px;font-weight:800;fill:var(--chord)}
+.cof-seg.sel text,.cof-seg.sel .n{fill:var(--accent-ink)}
+.cof-seg[data-act]{cursor:pointer}
+.cof-mid{fill:var(--surface);stroke:var(--line)}
+.cof .mid1{font-family:var(--f-mono);font-weight:800;font-size:22px;fill:var(--chord);text-anchor:middle}
+.cof .mid2{font-family:var(--f-body);font-size:11px;fill:var(--muted);text-anchor:middle}
 input[type=range]{width:100%;accent-color:var(--accent)}
 .notebar .seg button{font-size:13px;min-height:32px;padding:5px 10px}
 @media (min-width:900px){.cols{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
@@ -686,6 +701,21 @@ function keyFamily(key){
   return {maj, chords,
     borrowed: BORROWED.map(([rel, q, n, tip]) => ({n, name:name(rel, q), tip})),
     progs: COMMON_PROGS.map(p => ({nums:p, chords:p.split(' ').map(n => chords[+n - 1].name)}))};
+}
+/* Círculo de quintas: los 12 tonos mayores en orden de quintas (C arriba) y sus relativas menores */
+const COF = [0,7,2,9,4,11,6,1,8,3,10,5];
+const relMajor = key => key.minor ? {i:Music.mod(key.i + 3), minor:false} : key;
+/* Notas de la escala del tono (mayor, o menor natural) */
+function scaleOf(key){
+  const iv = key.minor ? [0,2,3,5,7,8,10] : [0,2,4,5,7,9,11];
+  return iv.map(x => Music.spellIn(Music.mod(key.i + x), key));
+}
+/* Armadura: cuántos sostenidos o bemoles tiene el tono y cuáles */
+function keySignature(key){
+  const ix = COF.indexOf(relMajor(key).i);
+  if(ix === 0) return {n:0, acc:'', notes:[]};
+  if(ix <= 6) return {n:ix, acc:'#', notes:['F#','C#','G#','D#','A#','E#'].slice(0, ix)};
+  return {n:12 - ix, acc:'b', notes:['Bb','Eb','Ab','Db','Gb'].slice(0, 12 - ix)};
 }
 /* Una progresión en el tono elegido: acordes, grados y voces de cada mano */
 function progressionIn(pr, key){
@@ -1602,7 +1632,7 @@ VIEWS.acompanar = () => {
     <div class="field"><label>Nivel</label><div class="seg">${[1,2,3].map(l => `<button data-act="accLevel" data-v="${l}" aria-pressed="${A.level === l}">${ACC_LEVELS[l]}</button>`).join('')}</div></div>
     <div class="field"><label>Estilo</label><div class="chips"><button class="chip" data-act="accStyle" data-v="" aria-pressed="${!A.style}">Todos</button>${ACC_STYLES.map(x => `<button class="chip" data-act="accStyle" data-v="${x[0]}" aria-pressed="${A.style === x[0]}">${esc(x[1])}</button>`).join('')}</div></div>
   </section>
-  <details class="card" id="acc-fam"${A.famOpen ? ' open' : ''}><summary><b>Acordes del tono de ${esc(kname(A.key))}</b> <span class="muted small">· como la rueda del círculo de quintas</span></summary>${familyHTML(A.key, A.fam, 'accFam')}</details>
+  <details class="card" id="acc-fam"${A.famOpen ? ' open' : ''}><summary><b>Círculo de quintas y acordes de ${esc(kname(A.key))}</b></summary>${circleHTML(A.key, 'accCof')}${familyHTML(A.key, A.fam, 'accFam')}</details>
   <div class="callout info acc-tips"><div><p><b>${esc(mom[1])}: ideas para empezar</b></p><ul>${mom[3].map(t => `<li>${esc(t)}</li>`).join('')}</ul>
     <p class="small">Estilos que suelen funcionar: ${mom[2].map(x => esc(ACC_STYLES.find(y => y[0] === x)[1].toLowerCase())).join(', ')}. Son sugerencias: adapta según lo que esté pasando.</p></div></div>
   ${st ? `<section class="card"><h3>${esc(st[1])}</h3><p class="small">${esc(st[2])}</p></section>` : ''}
@@ -1676,6 +1706,36 @@ function playUI(){
   document.querySelectorAll('[data-act="accListen"]').forEach(b => { const on = P && P.id === b.dataset.id; b.textContent = on ? '■ Detener' : '▶ Escuchar'; b.classList.toggle('pri', !!on); });
   document.querySelectorAll('.pc.on').forEach(x => x.classList.remove('on'));
   if(P && P.cur !== null){ const c = $('#pr-' + P.id); const pc = c && c.querySelectorAll('.pc')[P.cur]; pc && pc.classList.add('on'); }
+}
+/* Círculo de quintas dibujado como la rueda: 12 tonos mayores afuera, relativas menores adentro.
+   La "ventana" (el tono, su 4 y su 5, y sus relativas 6, 2 y 3) se ilumina con sus números. Con `act`, cada tono se puede tocar. */
+function cofSVG(key, act){
+  const maj = relMajor(key), sel = COF.indexOf(maj.i), C = 150, rad = d => (d - 90) * Math.PI / 180;
+  const pt = (r, a) => `${(C + r * Math.cos(a)).toFixed(1)},${(C + r * Math.sin(a)).toFixed(1)}`;
+  const seg = (k, r1, r2) => { const a0 = rad(k * 30 - 15), a1 = rad(k * 30 + 15); return `M${pt(r2, a0)} A${r2},${r2} 0 0 1 ${pt(r2, a1)} L${pt(r1, a1)} A${r1},${r1} 0 0 0 ${pt(r1, a0)}Z`; };
+  const WIN = {'-1':['4','2'], '0':['1','6'], '1':['5','3']};
+  let out = '';
+  COF.forEach((pc, k) => {
+    const d = ((k - sel + 18) % 12) - 6, w = WIN[d];
+    for(const [minor, r1, r2, rt] of [[false, 100, 146, 123], [true, 58, 100, 80]]){
+      const ki = minor ? Music.mod(pc + 9) : pc, label = Music.keyName({i:ki, minor}, 'auto'), num = w && w[minor ? 1 : 0];
+      const isSel = d === 0 && key.minor === minor, a = rad(k * 30), x = (C + rt * Math.cos(a)).toFixed(1), y = C + rt * Math.sin(a);
+      const attrs = act ? ` data-act="${act}" data-i="${ki}" data-m="${minor ? 1 : 0}" role="button" aria-label="${esc(label)}"` : '';
+      out += `<g class="cof-seg${w ? ' win' : ''}${isSel ? ' sel' : ''}${minor ? ' mi' : ''}"${attrs}><path d="${seg(k, r1, r2)}"/><text x="${x}" y="${(y + (num ? 0 : 5)).toFixed(1)}">${esc(label)}</text>${num ? `<text class="n" x="${x}" y="${(y + 13).toFixed(1)}">${num}</text>` : ''}</g>`;
+    }
+  });
+  const sig = keySignature(key);
+  out += `<circle cx="${C}" cy="${C}" r="56" class="cof-mid"/><text class="mid1" x="${C}" y="${C + 4}">${esc(kname(key))}</text><text class="mid2" x="${C}" y="${C + 22}">${sig.n ? `${sig.n} ${sig.acc === '#' ? '♯' : '♭'}` : 'sin ♯ ni ♭'}</text>`;
+  return `<svg class="cof" viewBox="0 0 300 300" role="img" aria-label="Círculo de quintas en ${esc(kname(key))}">${out}</svg>`;
+}
+function circleHTML(key, act){
+  const sig = keySignature(key), maj = relMajor(key), ix = COF.indexOf(maj.i);
+  const nb = [COF[(ix + 11) % 12], COF[(ix + 1) % 12]].map(i => kname({i, minor:false}));
+  return `<div class="cofwrap">${cofSVG(key, act)}
+    <p class="small"><b>Escala de ${esc(kname(key))}:</b> <span class="mono">${esc(scaleOf(key).join(' '))}</span></p>
+    <p class="small"><b>Armadura:</b> ${sig.n ? `${sig.n} ${sig.acc === '#' ? (sig.n === 1 ? 'sostenido' : 'sostenidos') : (sig.n === 1 ? 'bemol' : 'bemoles')} (<span class="mono">${esc(sig.notes.join(' '))}</span>)` : 'sin sostenidos ni bemoles'}</p>
+    <p class="small"><b>Tonos vecinos:</b> ${esc(nb.join(' y '))}, a un paso en el círculo. Comparten casi todos los acordes: son los más fáciles para cambiar de tono.</p>
+    ${act ? '<p class="small muted">Toca cualquier tono del círculo para verlo.</p>' : ''}</div>`;
 }
 /* "Acordes del tono": familia con números, prestados comunes y progresiones. Al tocar un acorde se ven los dedos. */
 function familyHTML(key, sel, act){
@@ -1972,7 +2032,7 @@ function renderLive(keep){
       <button id="lvLock" aria-pressed="${v.locked}" title="${v.locked?'Mantén pulsado para desbloquear':'Bloquear controles'}">${v.locked?'Mantener':'Bloquear'}</button>
     </div>
     ${v.panel==='key' ? `<div class="lv-panel">${s.key ? keyGrid(curKey.i, s.key.minor, 'liveKey', s.key.i) : '<p>Confirma la tonalidad original para elegir por nombre. Usa −½ y +½.</p>'}</div>` : ''}
-    ${v.panel==='fam' ? `<div class="lv-panel">${curKey ? familyHTML(curKey, v.fam, 'liveFam') : '<p>Confirma la tonalidad original de la canción para ver sus acordes.</p>'}</div>` : ''}
+    ${v.panel==='fam' ? `<div class="lv-panel">${curKey ? `<button class="btn sm" data-act="liveCof">${v.cof ? 'Ocultar círculo de quintas' : 'Ver círculo de quintas'}</button>${v.cof ? circleHTML(curKey, null) : ''}${familyHTML(curKey, v.fam, 'liveFam')}` : '<p>Confirma la tonalidad original de la canción para ver sus acordes.</p>'}</div>` : ''}
     ${v.panel==='search' ? `<div class="lv-panel">${curKey ? `<p class="lv-hint">Estás en <b>${esc(Music.keyName(curKey,S.prefs.spell))}</b>. Toca <b>En ${esc(Music.keyName(curKey,S.prefs.spell))}</b> para abrir la otra canción en tu mismo tono.</p>` : ''}<input class="inp" id="lvq" type="search" placeholder="Frase, título o acorde" autocomplete="off" style="font-size:18px"><div id="lvres"></div></div>` : ''}
     <div class="lv-sheet" id="lvSheet" style="--live-size:${S.prefs.liveSize}px">${sheetHTML(s, v.semi, S.prefs.spell)}${item&&item.notes?`<div class="lv-next">Nota: ${esc(item.notes)}</div>`:''}${nextInfo}</div>
     <div class="lv-bar">
@@ -2059,6 +2119,8 @@ const ACT = {
   accGo(b){ const A = accState(), pr = PROGRESSIONS.find(x => x.id === b.dataset.id); if(pr.level > A.level || (A.style && !pr.styles.includes(A.style))){ A.level = 3; A.style = ''; saveAcc(); render(); } const el = $('#pr-' + pr.id); el && el.scrollIntoView({block:'start'}); },
   accPlay(b){ S.accPlay = {id:b.dataset.id, i:Player.on && Player.on.id === b.dataset.id && Player.on.cur !== null ? Player.on.cur : 0}; renderAccPlay(); },
   accFam(b){ const A = accState(); A.fam = A.fam === b.dataset.v ? null : b.dataset.v; A.famOpen = true; const y = scrollY; render(); window.scrollTo(0, y); },
+  liveCof(){ S.live.cof = !S.live.cof; renderLive(true); },
+  accCof(b){ const A = accState(); A.key = {i:+b.dataset.i, minor:b.dataset.m === '1'}; A.off = {}; A.fam = null; A.famOpen = true; saveAcc(); const y = scrollY; render(); window.scrollTo(0, y); },
   liveFam(b){ S.live.fam = S.live.fam === b.dataset.v ? null : b.dataset.v; renderLive(true); },
   accListen(b){ if(Player.on && Player.on.id === b.dataset.id) stopProg(); else playProg(b.dataset.id); },
   accPattern(b){ accState().pattern = b.dataset.v; saveAcc(); document.querySelectorAll('[data-act="accPattern"]').forEach(x => x.setAttribute('aria-pressed', x.dataset.v === b.dataset.v)); },
