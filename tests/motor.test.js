@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path');
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const eng = html.slice(html.indexOf('/*ENGINE-START*/'), html.indexOf('/*ENGINE-END*/'));
-eval(eng + ';globalThis.E={Music,parseSongText,songToText,itemsToText,searchIndex,buildIndex,checkBackup,planRestore,isNoteText,matchKey,respellSections,transitionOptions,keyRelation,rankByKey,PROGRESSIONS,progressionIn,romanOf,voiceLead,chordTones,barEvents,keyFamily,scaleOf,keySignature,COF}');
+eval(eng + ';globalThis.E={Music,parseSongText,songToText,itemsToText,searchIndex,buildIndex,checkBackup,planRestore,isNoteText,matchKey,respellSections,transitionOptions,keyRelation,rankByKey,PROGRESSIONS,progressionIn,romanOf,voiceLead,chordTones,barEvents,keyFamily,scaleOf,keySignature,COF,detectPitch,freqToMidi,keysFromHistogram,keyGuess}');
 const {Music} = E; let fail = 0;
 const eq = (a, b, m) => { if (JSON.stringify(a) !== JSON.stringify(b)) { fail++; console.log('FALLA', m, JSON.stringify(a), '≠', JSON.stringify(b)); } else console.log('ok  ', m); };
 const T = (c, s, k) => Music.transposeSym(c, s, Music.flatsFor(k, s, 'auto'), false);
@@ -74,6 +74,20 @@ eq(E.keySignature({i:7,minor:false}), {n:1, acc:'#', notes:['F#']}, 'G tiene 1 s
 eq(E.keySignature({i:3,minor:false}), {n:3, acc:'b', notes:['Bb','Eb','Ab']}, 'Eb tiene 3 bemoles');
 eq(E.keySignature({i:4,minor:true}).n, 1, 'Em tiene la armadura de G');
 eq(E.COF.map(i => Music.keyName({i,minor:false},'auto')).join(' '), 'C G D A E B F# Db Ab Eb Bb F', 'orden del círculo de quintas');
+/* Detectar el tono de una voz */
+const SR = 44100, tone = (f, n = 2048, amp = .3) => { const b = new Float32Array(n); for(let i = 0; i < n; i++){ const x = 2 * Math.PI * f * i / SR; b[i] = amp * (Math.sin(x) + .5 * Math.sin(2 * x) + .25 * Math.sin(3 * x)); } return b; };
+for(const f of [110, 196, 261.63, 440, 659.25]){ const p = E.detectPitch(tone(f), SR); eq(p && Math.abs(E.freqToMidi(p.freq) - E.freqToMidi(f)) < .1, true, `reconoce la nota de ${f} Hz`); }
+eq(E.detectPitch(new Float32Array(2048), SR), null, 'silencio: no inventa una nota');
+const noise = new Float32Array(2048).map(() => Math.random() * .4 - .2);
+eq(E.detectPitch(noise, SR), null, 'ruido: no inventa una nota');
+const H = o => { const h = new Array(12).fill(0); for(const [pc, w] of Object.entries(o)) h[pc] = w; return h; };
+eq(E.keysFromHistogram(H({0:5,2:2,4:4,5:2,7:4,9:2,11:1})).slice(0,1).map(x => Music.keyName(x.key,'auto')), ['C'], 'melodía en C → C');
+eq(E.keysFromHistogram(H({7:5,9:2,11:4,0:2,2:4,4:2,6:1})).slice(0,1).map(x => Music.keyName(x.key,'auto')), ['G'], 'melodía en G (con F#) → G');
+eq(E.keysFromHistogram(H({9:5,11:2,0:3,2:2,4:4,5:1,7:1,8:1})).slice(0,1).map(x => Music.keyName(x.key,'auto')), ['Am'], 'melodía en Am (con G#) → Am');
+eq(E.keyGuess(H({0:1,2:1}), 20), null, 'con pocas notas no adivina');
+eq(E.keyGuess(H({0:5,2:2,4:4,5:2,7:4,9:2,11:1}), 3), null, 'con menos de 4 segundos no adivina');
+const g = E.keyGuess(H({0:5,2:2,4:4,5:2,7:4,9:2,11:1}), 20);
+eq([Music.keyName(g.key,'auto'), Music.keyName(g.rel,'auto')], ['C','Am'], 'da el tono y su relativa');
 /* Fase 4: transiciones */
 const K = (i, minor=false) => ({i, minor});
 const to = (a, b) => E.transitionOptions(a, b).map(o => [o.id, o.chords.join(' ')]);

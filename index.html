@@ -251,6 +251,13 @@ pre.sheet .c.bad{color:var(--warn);text-decoration:underline dotted;text-underli
 .cof-seg .n{font-family:var(--f-body);font-size:10.5px;font-weight:800;fill:var(--chord)}
 .cof-seg.sel text,.cof-seg.sel .n{fill:var(--accent-ink)}
 .cof-seg[data-act]{cursor:pointer}
+/* Detectar tono */
+.det{display:flex;flex-direction:column;gap:8px}
+.det-note{font-family:var(--f-mono);font-weight:800;font-size:clamp(40px,12vw,64px);text-align:center;color:var(--chord);line-height:1.1;min-height:1.1em}
+.det-meter{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}
+.det-meter i{display:block;height:100%;width:0;background:var(--accent);transition:width .08s}
+.det-res{text-align:center;display:flex;flex-direction:column;gap:4px;align-items:center;padding:10px;border-radius:12px;background:var(--accent-soft)}
+.det-key{font-family:var(--f-mono);font-weight:800;font-size:48px;color:var(--chord);line-height:1}
 .cof-mid{fill:var(--surface);stroke:var(--line)}
 .cof .mid1{font-family:var(--f-mono);font-weight:800;font-size:22px;fill:var(--chord);text-anchor:middle}
 .cof .mid2{font-family:var(--f-body);font-size:11px;fill:var(--muted);text-anchor:middle}
@@ -719,6 +726,46 @@ function keySignature(key){
   if(ix <= 6) return {n:ix, acc:'#', notes:['F#','C#','G#','D#','A#','E#'].slice(0, ix)};
   return {n:12 - ix, acc:'b', notes:['Bb','Eb','Ab','Db','Gb'].slice(0, 12 - ix)};
 }
+/* ================= DETECTAR EL TONO DE UNA VOZ ================= */
+/* Nota que suena en un fragmento de audio (método YIN). Devuelve {freq, clarity} o null si hay silencio o ruido. */
+function detectPitch(buf, sr){
+  const n = buf.length; let rms = 0;
+  for(let i = 0; i < n; i++) rms += buf[i] * buf[i];
+  if(Math.sqrt(rms / n) < .01) return null;
+  const minLag = Math.floor(sr / 1100), maxLag = Math.min(Math.floor(sr / 70), (n >> 1) - 2), W = n - maxLag - 2;
+  const cm = new Float32Array(maxLag + 2); cm[0] = 1; let run = 0;
+  for(let tau = 1; tau <= maxLag + 1; tau++){
+    let d = 0; for(let i = 0; i < W; i++){ const v = buf[i] - buf[i + tau]; d += v * v; }
+    run += d; cm[tau] = run ? d * tau / run : 1;
+  }
+  let tau = -1;
+  for(let t = Math.max(2, minLag); t <= maxLag; t++) if(cm[t] < .15){ while(t + 1 <= maxLag && cm[t + 1] < cm[t]) t++; tau = t; break; }
+  if(tau < 0) return null;
+  const x0 = cm[tau - 1], x1 = cm[tau], x2 = cm[tau + 1], a = (x0 + x2 - 2 * x1) / 2, b = (x2 - x0) / 2;
+  return {freq: sr / (tau + (a ? -b / (2 * a) : 0)), clarity: 1 - x1};
+}
+const freqToMidi = f => 69 + 12 * Math.log2(f / 440);
+/* Tono más probable a partir de cuánto sonó cada nota (12 casillas, de C a B).
+   Compara con los perfiles de Krumhansl de mayor y menor en los 12 tonos. Devuelve la lista ordenada. */
+const KK_MAJ = [6.35,2.23,3.48,2.33,4.38,4.09,2.52,5.19,2.39,3.66,2.29,2.88];
+const KK_MIN = [6.33,2.68,3.52,5.38,2.60,3.53,2.54,4.75,3.98,2.69,3.34,3.17];
+function corr(a, b){ const n = a.length, ma = a.reduce((x, y) => x + y) / n, mb = b.reduce((x, y) => x + y) / n; let sab = 0, sa = 0, sb = 0; for(let i = 0; i < n; i++){ sab += (a[i] - ma) * (b[i] - mb); sa += (a[i] - ma) ** 2; sb += (b[i] - mb) ** 2; } return sa && sb ? sab / Math.sqrt(sa * sb) : 0; }
+function keysFromHistogram(h){
+  const out = [];
+  for(let k = 0; k < 12; k++) for(const minor of [false, true]){ const prof = minor ? KK_MIN : KK_MAJ; out.push({key:{i:k, minor}, r:corr(h, h.map((_, pc) => prof[Music.mod(pc - k)]))}); }
+  return out.sort((a, b) => b.r - a.r);
+}
+/* Resumen para mostrar: el tono, su relativa y qué tan seguro es según cuánto se escuchó */
+function keyGuess(h, seconds){
+  const notes = h.filter(x => x >= .3).length;
+  if(seconds < 4 || notes < 4) return null;
+  const list = keysFromHistogram(h), best = list[0];
+  const rel = best.key.minor ? {i:Music.mod(best.key.i + 3), minor:false} : {i:Music.mod(best.key.i + 9), minor:true};
+  const other = list.find(x => !(x.key.i === best.key.i && x.key.minor === best.key.minor) && !(x.key.i === rel.i && x.key.minor === rel.minor));
+  const margin = best.r - other.r;
+  return {key:best.key, rel, conf: seconds >= 15 && margin >= .1 ? 'alta' : seconds >= 8 && margin >= .05 ? 'media' : 'baja', list:list.slice(0, 4)};
+}
+
 /* Una progresión en el tono elegido: acordes, grados y voces de cada mano */
 function progressionIn(pr, key){
   const from = pr.minor ? 9 : 0, semi = Music.semiNorm(key.i - from);
@@ -1629,7 +1676,7 @@ VIEWS.acompanar = () => {
   <header class="ph"><div><p class="eyebrow">Acompañamiento libre</p><h1>Improvisación</h1></div></header>
   <section class="card">
     <div class="field"><label for="acc-mom">Momento</label><select class="inp" id="acc-mom">${ACC_MOMENTS.map(m => `<option value="${m[0]}"${m[0] === A.moment ? ' selected' : ''}>${esc(m[1])}</option>`).join('')}</select></div>
-    <div class="field"><label>Tonalidad</label>${keyGrid(A.key.i, A.key.minor, 'accKey')}
+    <div class="field"><label>Tonalidad</label><div><button class="btn sm" data-act="detOpen">🎤 Detectar el tono de alguien cantando</button></div>${keyGrid(A.key.i, A.key.minor, 'accKey')}
       <div class="seg" style="margin-top:6px">${[[false,'Mayor'],[true,'Menor']].map(([v, l]) => `<button data-act="accMode" data-v="${v ? 1 : 0}" aria-pressed="${A.key.minor === v}">${l}</button>`).join('')}</div></div>
     <div class="field"><label>Nivel</label><div class="seg">${[1,2,3].map(l => `<button data-act="accLevel" data-v="${l}" aria-pressed="${A.level === l}">${ACC_LEVELS[l]}</button>`).join('')}</div></div>
     <div class="field"><label>Estilo</label><div class="chips"><button class="chip" data-act="accStyle" data-v="" aria-pressed="${!A.style}">Todos</button>${ACC_STYLES.map(x => `<button class="chip" data-act="accStyle" data-v="${x[0]}" aria-pressed="${A.style === x[0]}">${esc(x[1])}</button>`).join('')}</div></div>
@@ -1755,6 +1802,68 @@ function familyHTML(key, sel, act){
     <p class="fam-h">Progresiones comunes</p><div class="fam-progs">${F.progs.map(p => `<div><span class="mono muted">${esc(p.nums.split(' ').join('-'))}</span> <b class="mono">${esc(p.chords.join(' '))}</b></div>`).join('')}</div>
     <p class="small muted">Si alguien empieza otra canción en este tono, casi siempre se mueve entre estos acordes. Para el coro prueba primero el 4 o el 6; si no, el 5.</p>
   </div>`;
+}
+/* ================= DETECTAR TONO (micrófono) =================
+   Escucha a quien canta, muestra la nota del momento y estima el tono. Todo se procesa en el teléfono: el audio no se guarda ni se envía. */
+const Det = {stream:null, src:null, an:null, buf:null, timer:0, hist:null, voiced:0, last:null, stable:null, stableAt:0, sig:'', fam:null, where:null, err:''};
+const noteLabel = pc => [1,3,6,8,10].includes(pc) ? `${Music.spell(pc, false)} / ${Music.spell(pc, true)}` : Music.spell(pc, false);
+function detBodyHTML(){
+  return `<div class="det">
+    <p class="small muted">Pon el teléfono cerca de quien canta. Funciona mejor si canta sola o con poca música. El audio no se guarda ni se envía a ningún lado.</p>
+    <div class="det-note" id="det-note">–</div><p class="small muted" style="text-align:center">Nota que está cantando</p>
+    <div class="det-meter"><i id="det-meter"></i></div>
+    <div id="det-res">${detResultHTML()}</div>
+    <div class="row" style="justify-content:center"><button class="btn sm" data-act="detReset">Empezar de nuevo</button></div></div>`;
+}
+function detResultHTML(){
+  if(Det.err) return `<div class="callout"><p>${esc(Det.err)}</p></div>`;
+  const g = Det.hist ? keyGuess(Det.hist, Det.voiced) : null;
+  if(!g) return `<p class="small muted" style="text-align:center">Escuchando… ${Det.voiced >= 1 ? `llevo ${Math.round(Det.voiced)} segundos de canto; sigue unas frases más.` : 'cuando alguien cante, aquí aparecerá el tono.'}</p>`;
+  return `<div class="det-res"><p class="small">${g.conf === 'alta' ? 'Muy probablemente' : 'Probablemente'} está cantando en</p>
+    <div class="det-key">${esc(kname(g.key))}</div>
+    <p class="small">o en su relativa <b>${esc(kname(g.rel))}</b>: usan los mismos acordes.</p>
+    <p class="small muted">Seguridad ${g.conf}${g.conf !== 'alta' ? ': mientras más escuche, más seguro estará.' : '.'}</p>
+    ${Det.where === 'acc' ? `<div class="row" style="justify-content:center"><button class="btn pri" data-act="detUse">Usar ${esc(kname(g.key))} en Improvisar</button></div>` : ''}</div>
+    ${familyHTML(g.key, Det.fam, 'detFam')}`;
+}
+async function detStart(){
+  Det.hist = new Array(12).fill(0); Det.voiced = 0; Det.last = null; Det.stable = null; Det.sig = ''; Det.err = '';
+  const ctx = audioCtx();
+  if(!ctx || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ Det.err = 'Este navegador no permite usar el micrófono.'; return detPaint(true); }
+  stopProg();
+  try{ if(navigator.audioSession) navigator.audioSession.type = 'play-and-record'; }catch(e){}
+  try{ Det.stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}}); }
+  catch(e){ Det.err = 'No se pudo usar el micrófono. Si lo bloqueaste, permítelo en los ajustes del navegador (en iPhone: Ajustes → Safari → Micrófono) y vuelve a intentarlo.'; return detPaint(true); }
+  if(!$('#det-box')){ detStop(); return; }
+  Det.src = ctx.createMediaStreamSource(Det.stream); Det.an = ctx.createAnalyser(); Det.an.fftSize = 2048; Det.src.connect(Det.an);
+  Det.buf = new Float32Array(2048); Det.timer = setInterval(detTick, 60);
+}
+function detTick(){
+  if(!$('#det-box')) return detStop();
+  Det.an.getFloatTimeDomainData(Det.buf);
+  let rms = 0; for(const x of Det.buf) rms += x * x; rms = Math.sqrt(rms / Det.buf.length);
+  const p = detectPitch(Det.buf, Player.ctx.sampleRate), now = Date.now();
+  if(p && p.clarity > .8 && p.freq > 75 && p.freq < 1100){
+    const m = freqToMidi(p.freq), r = Math.round(m), pc = Music.mod(r);
+    if(Math.abs(m - r) < .4){ if(Det.last === pc){ Det.hist[pc] += .06; Det.voiced += .06; Det.stable = pc; Det.stableAt = now; } Det.last = pc; }
+    else Det.last = null;
+  } else Det.last = null;
+  const meter = $('#det-meter'); if(meter) meter.style.width = Math.min(100, rms * 400) + '%';
+  const note = $('#det-note'); if(note) note.textContent = Det.stable !== null && now - Det.stableAt < 600 ? noteLabel(Det.stable) : '–';
+  detPaint(false);
+}
+/* Solo vuelve a pintar el resultado cuando cambia (para no parpadear ni estorbar los toques) */
+function detPaint(force){
+  const g = Det.hist ? keyGuess(Det.hist, Det.voiced) : null;
+  const sig = Det.err || (g ? `${g.key.i}${g.key.minor}${g.conf}${Det.fam}` : 'n' + Math.round(Det.voiced));
+  if(!force && sig === Det.sig) return;
+  Det.sig = sig; const r = $('#det-res'); if(r) r.innerHTML = detResultHTML();
+}
+function detStop(){
+  clearInterval(Det.timer); Det.timer = 0;
+  if(Det.stream){ Det.stream.getTracks().forEach(t => t.stop()); Det.stream = null; }
+  if(Det.src){ try{ Det.src.disconnect(); }catch(e){} Det.src = null; }
+  try{ if(navigator.audioSession) navigator.audioSession.type = 'playback'; }catch(e){}
 }
 function renderAccPlay(){
   const P = S.accPlay, pr = PROGRESSIONS.find(x => x.id === P.id), A = accState();
@@ -2032,9 +2141,11 @@ function renderLive(keep){
     <div class="lv-top">
       <button data-act="liveClose" aria-label="Salir del modo en vivo">✕</button>
       <div class="lv-title"><b>${esc(s.title)}</b><span>${curKey?`<em>${esc(Music.keyName(curKey,S.prefs.spell))}</em> · original ${esc(Music.keyName(s.key,S.prefs.spell))}`:esc(Music.semiLabel(v.semi))}${v.semi?' · '+esc(Music.semiLabel(v.semi)):''}${sl?` · ${v.ix+1}/${sl.items.length}`:''}</span></div>
+      <button data-act="detOpen" aria-pressed="${v.panel === 'det'}" aria-label="Detectar el tono de quien canta" title="Detectar tono">🎤</button>
       <button id="lvLock" aria-pressed="${v.locked}" title="${v.locked?'Mantén pulsado para desbloquear':'Bloquear controles'}">${v.locked?'Mantener':'Bloquear'}</button>
     </div>
     ${v.panel==='key' ? `<div class="lv-panel">${s.key ? keyGrid(curKey.i, s.key.minor, 'liveKey', s.key.i) : '<p>Confirma la tonalidad original para elegir por nombre. Usa −½ y +½.</p>'}</div>` : ''}
+    ${v.panel==='det' ? `<div class="lv-panel" id="det-box">${detBodyHTML()}</div>` : ''}
     ${v.panel==='fam' ? `<div class="lv-panel">${curKey ? `<button class="btn sm" data-act="liveCof">${v.cof ? 'Ocultar círculo de quintas' : 'Ver círculo de quintas'}</button>${v.cof ? circleHTML(curKey, null) : ''}${familyHTML(curKey, v.fam, 'liveFam')}` : '<p>Confirma la tonalidad original de la canción para ver sus acordes.</p>'}</div>` : ''}
     ${v.panel==='search' ? `<div class="lv-panel">${curKey ? `<p class="lv-hint">Estás en <b>${esc(Music.keyName(curKey,S.prefs.spell))}</b>. Toca <b>En ${esc(Music.keyName(curKey,S.prefs.spell))}</b> para abrir la otra canción en tu mismo tono.</p>` : ''}<input class="inp" id="lvq" type="search" placeholder="Frase, título o acorde" autocomplete="off" style="font-size:18px"><div id="lvres"></div></div>` : ''}
     <div class="lv-sheet" id="lvSheet" style="--live-size:${S.prefs.liveSize}px">${sheetHTML(s, v.semi, S.prefs.spell)}${item&&item.notes?`<div class="lv-next">Nota: ${esc(item.notes)}</div>`:''}${nextInfo}</div>
@@ -2045,6 +2156,7 @@ function renderLive(keep){
       <div class="grp">${v.history.length?`<button data-act="liveBack">Volver</button>`:''}${sl?`<button data-act="liveNav" data-d="-1" ${v.ix>0?'':'disabled'} aria-label="Canción anterior">◀</button><button data-act="liveNav" data-d="1" ${v.ix<sl.items.length-1?'':'disabled'} aria-label="Canción siguiente">▶</button>`:''}${item && s.key && v.semi!==savedSemi?`<button data-act="liveSave">Guardar tono</button>`:''}</div>
     </div>`;
   if(keep) $('#lvSheet').scrollTop = prevScroll;
+  if(v.panel !== 'det') detStop();
   $('#lvSheet').addEventListener('click', e => { if(!S.live.auto || e.target.closest('button,a,input,select')) return; S.live.autoPaused = !S.live.autoPaused; if(!S.live.autoPaused) autoStart(); renderLive(true); });
   const lock = $('#lvLock'); let tmr = null;
   lock.addEventListener('pointerdown', () => { if(!S.live.locked) return; tmr = setTimeout(() => { S.live.locked = false; renderLive(true); toast('Controles desbloqueados'); }, 700); });
@@ -2079,7 +2191,7 @@ function autoLoop(ts){
   }
   v.autoRaf = requestAnimationFrame(autoLoop);
 }
-function closeLive(){ const L = $('#live'); L.hidden = true; L.innerHTML = ''; document.body.style.overflow = ''; try{ S.live && S.live.wake && S.live.wake.release(); }catch(e){} S.live = null; if(S.route.view==='cancion' || S.route.view==='inicio' || S.route.view==='servicio') render(); }
+function closeLive(){ detStop(); const L = $('#live'); L.hidden = true; L.innerHTML = ''; document.body.style.overflow = ''; try{ S.live && S.live.wake && S.live.wake.release(); }catch(e){} S.live = null; if(S.route.view==='cancion' || S.route.view==='inicio' || S.route.view==='servicio') render(); }
 
 /* ================= ACCIONES ================= */
 const ACT = {
@@ -2090,7 +2202,16 @@ const ACT = {
   spell(b){ S.cur.pref = b.dataset.v; refreshSong(); },
   edit(b){ startReview([b.dataset.id]); },
   original(b){ openOriginal(b.dataset.id); },
-  closeModal(){ const m = $('#modal'); m.hidden = true; m.innerHTML = ''; },
+  closeModal(){ detStop(); const m = $('#modal'); m.hidden = true; m.innerHTML = ''; },
+  detOpen(){
+    Det.fam = null;
+    if(S.live){ if(S.live.panel === 'det'){ S.live.panel = null; detStop(); renderLive(true); return; } Det.where = 'live'; S.live.panel = 'det'; renderLive(true); }
+    else { Det.where = 'acc'; const m = $('#modal'); m.innerHTML = `<div class="box" role="dialog" aria-label="Detectar tono" style="max-width:520px"><div class="mh"><b>🎤 Detectar tono</b><button class="btn" data-act="closeModal">Cerrar</button></div><div class="mb" id="det-box">${detBodyHTML()}</div></div>`; m.hidden = false; }
+    detStart();
+  },
+  detReset(){ Det.hist = new Array(12).fill(0); Det.voiced = 0; Det.stable = null; Det.fam = null; detPaint(true); },
+  detFam(b){ Det.fam = Det.fam === b.dataset.v ? null : b.dataset.v; detPaint(true); },
+  detUse(){ const g = keyGuess(Det.hist, Det.voiced); if(!g) return; const A = accState(); A.key = g.key; A.off = {}; A.fam = null; A.famOpen = true; saveAcc(); ACT.closeModal(); render(); toast(`Improvisación en ${kname(g.key)}`); },
   liveCur(){ openLive({songId:S.cur.id, semi:S.cur.semi}); },
   liveSong(b){ openLive({songId:b.dataset.id, semi:0}); },
   liveSet(b){ const sl = S.setlists.find(x=>x.id===b.dataset.id); if(!sl || !sl.items.length) return; openLive(liveFromSet(sl, +(b.dataset.ix||0))); },
