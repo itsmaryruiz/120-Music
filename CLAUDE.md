@@ -24,6 +24,7 @@ Están hechas las fases 1 a 5 del plan de `docs/PROMPT_ORIGINAL.md`, todas funci
   - Listas de servicio con tono propio por canción, notas, enlace con la siguiente y opción de duplicar.
   - Modo en vivo con pantalla oscura, botones grandes, bloqueo contra toques accidentales, búsqueda rápida y navegación por la lista.
   - Al transportar se conserva la posición de lectura y la pantalla no se apaga.
+  - **Desplazamiento automático** (botón "▶ Auto"): la letra baja sola; velocidad 1–10 con − / + (se guarda en `Prefs.liveScroll`); tocar la letra pausa o sigue; funciona con la pantalla bloqueada; se detiene al final y al cambiar de canción. Alternativa sin pedal Bluetooth (la dueña lo prefirió así).
   - **Acordes del tono** (botón "Acordes" en vivo y tarjeta en Improvisar): como una rueda del círculo de quintas. Familia de 7 acordes con sus números (mayores 1-4-5, menores 6-2-3, el 7), acordes prestados comunes (b7, 3 mayor, 2 mayor, 4 menor), progresiones comunes y teclado del acorde tocado. Un tono menor usa la familia de su relativa mayor (sistema de números). Lógica en `keyFamily`. Sirve para seguir a la cantante cuando entra una canción que no está en la lista.
   - **Círculo de quintas** (`cofSVG`, `circleHTML`): los 12 tonos mayores afuera y sus relativas menores adentro, con la "ventana" del tono iluminada y sus números (1-4-5 / 6-2-3), escala (`scaleOf`), armadura (`keySignature`) y tonos vecinos. En Improvisar se puede tocar para cambiar de tono; en vivo es solo de consulta (botón "Ver círculo de quintas" dentro de Acordes).
   - **Buscar en vivo en el mismo tono:** cada resultado de la búsqueda tiene un botón "En C" (el tono que suena) además de "Original". Si una canción es mayor y la otra menor, usa la relativa (C ↔ Am), marcada "relativa". Lógica en `matchKey` (motor). "Volver" regresa a la canción anterior con su tono.
@@ -90,7 +91,7 @@ Song = { id, title, artist, key:{i:0-11, minor:bool}|null,
   createdAt, updatedAt, lastOpened, isExample?, meta:{notes:[]} }
 SourceFile = { id, name, ext, size, blob, addedAt, status }
 Setlist = { id, name, date:'YYYY-MM-DD', type, items:[{songId, key, notes, link, transition?:{text, name, from, to}}], isExample? }
-Prefs = { id:'prefs', spell:'auto'|'sharp'|'flat', liveSize, livePalette:'dark'|'light', perPage, seeded, lastBackup?, noteColor:'red'|'blue'|'gray', noteItalic, acc?:{key, moment, level, style, pattern, bpm} }
+Prefs = { id:'prefs', spell:'auto'|'sharp'|'flat', liveSize, livePalette:'dark'|'light', perPage, seeded, lastBackup?, noteColor:'red'|'blue'|'gray', noteItalic, liveScroll, acc?:{key, moment, level, style, pattern, bpm} }
 Backup = { app:'120 Worship' (también se aceptan copias con '120 Music'), version:1, exportedAt, songs:[Song], setlists:[Setlist], files:[{...SourceFile sin blob, type, data:base64}] }
 ```
 
@@ -137,7 +138,7 @@ Se probó con un PDF real de la usuaria, "Suelto" de Sarai Rivera. El archivo no
 
 ## Próximos pasos sugeridos
 
-1. **Fase 6:** compartir listas, pedal Bluetooth, sincronización.
+1. **Fase 6:** compartir listas, sincronización y, si algún día lo compra, pedal Bluetooth (se recibe como teclas de flecha o espacio).
 2. **OCR (en pausa, la dueña no lo quiere por ahora):** tesseract.js con los archivos dentro del repositorio.
 3. **Librerías locales (opcional):** copiar pdf.js y mammoth a `vendor/` para no depender de cdnjs.
 

@@ -310,7 +310,9 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .lv-hit-b button{min-height:48px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);font-weight:700;font-size:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1}
 .lv-hit-b button.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .lv-hit-b small{font-size:10.5px;font-weight:600;opacity:.85}
-.live.locked .lv-bar button:not(#lvLockB), .live.locked .lv-top button:not(#lvLock){opacity:.35;pointer-events:none}
+.live.locked .lv-bar button:not(#lvLockB):not(#lvAuto), .live.locked .lv-top button:not(#lvLock){opacity:.35;pointer-events:none}
+.lv-speed{display:flex;align-items:center;font-size:13px;color:var(--muted);padding:0 2px;white-space:nowrap}
+#lvAuto[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 #lvLock[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:80;background:var(--sel);color:var(--sel-ink);padding:10px 16px;border-radius:10px;font-weight:600;font-size:14px;max-width:calc(100% - 32px)}
 @media (prefers-reduced-motion:no-preference){.toast{animation:up .18s ease-out}@keyframes up{from{transform:translate(-50%,8px);opacity:0}}}
@@ -1119,7 +1121,7 @@ const dbGet = async (s, id) => (await dbReq(s,'readonly', st => st.get(id))) || 
 /* ================= ESTADO ================= */
 const S = {
   songs:[], setlists:[], index:new Map(),
-  prefs:{id:'prefs', spell:'auto', liveSize:22, livePalette:'dark', perPage:false, seeded:false, noteColor:'red', noteItalic:true},
+  prefs:{id:'prefs', spell:'auto', liveSize:22, livePalette:'dark', perPage:false, seeded:false, noteColor:'red', noteItalic:true, liveScroll:3},
   route:{view:'inicio', params:{}}, stack:[],
   lib:{keys:new Set(), mode:'all', source:'original', fav:false, tag:'', sort:'title', q:''},
   cur:null, live:null, jobs:[], review:null
@@ -2024,6 +2026,7 @@ function renderLive(keep){
     if(ns){ const nsemi = ns.key && nIt.key ? Music.semiBetween(ns.key, nIt.key) : 0; const e = edgeChords(ns);
       nextInfo = `${item && item.transition && item.transition.text ? `<div class="lv-trans">Transición: <b>${esc(item.transition.text.split(/\s+/).join(' → '))}</b> → ${esc(ns.title)}</div>` : ''}<div class="lv-next">${item && item.link ? '<b style="font-family:var(--f-body)">↳ Sin pausa</b> · ':''}Siguiente: ${esc(ns.title)} · entra en <b>${esc(tr(ns, e.first, nsemi, S.prefs.spell))}</b>${ns.key?` (tono ${esc(Music.keyName({i:Music.mod(ns.key.i+nsemi),minor:ns.key.minor}, S.prefs.spell))})`:''}</div>`; }
   }
+  if(!keep){ v.auto = false; v.autoPaused = false; }
   L.classList.toggle('locked', v.locked);
   L.innerHTML = `
     <div class="lv-top">
@@ -2038,9 +2041,11 @@ function renderLive(keep){
     <div class="lv-bar">
       <div class="grp"><button data-act="liveStep" data-d="-1" aria-label="Bajar medio tono">−½</button><button data-act="liveStep" data-d="1" aria-label="Subir medio tono">+½</button><button data-act="livePanel" data-v="key">Tono</button><button data-act="livePanel" data-v="fam">Acordes</button></div>
       <div class="grp"><button data-act="liveSize" data-d="-2" aria-label="Letra más pequeña">A−</button><button data-act="liveSize" data-d="2" aria-label="Letra más grande">A+</button><button data-act="livePanel" data-v="search" aria-label="Buscar">Buscar</button></div>
+      <div class="grp">${v.auto ? `<button data-act="liveSpeed" data-d="-1" aria-label="Más lento">−</button><span class="lv-speed">Vel. ${S.prefs.liveScroll || 3}</span><button data-act="liveSpeed" data-d="1" aria-label="Más rápido">+</button>` : ''}<button id="lvAuto" data-act="liveAuto" aria-pressed="${!!(v.auto && !v.autoPaused)}">${!v.auto ? '▶ Auto' : v.autoPaused ? '▶ Seguir' : '⏸ Pausa'}</button></div>
       <div class="grp">${v.history.length?`<button data-act="liveBack">Volver</button>`:''}${sl?`<button data-act="liveNav" data-d="-1" ${v.ix>0?'':'disabled'} aria-label="Canción anterior">◀</button><button data-act="liveNav" data-d="1" ${v.ix<sl.items.length-1?'':'disabled'} aria-label="Canción siguiente">▶</button>`:''}${item && s.key && v.semi!==savedSemi?`<button data-act="liveSave">Guardar tono</button>`:''}</div>
     </div>`;
   if(keep) $('#lvSheet').scrollTop = prevScroll;
+  $('#lvSheet').addEventListener('click', e => { if(!S.live.auto || e.target.closest('button,a,input,select')) return; S.live.autoPaused = !S.live.autoPaused; if(!S.live.autoPaused) autoStart(); renderLive(true); });
   const lock = $('#lvLock'); let tmr = null;
   lock.addEventListener('pointerdown', () => { if(!S.live.locked) return; tmr = setTimeout(() => { S.live.locked = false; renderLive(true); toast('Controles desbloqueados'); }, 700); });
   ['pointerup','pointerleave','pointercancel'].forEach(ev => lock.addEventListener(ev, () => clearTimeout(tmr)));
@@ -2058,6 +2063,21 @@ function renderLive(keep){
       return `<div class="lv-hit"><div class="lv-hit-t"><b>${esc(t.title)}</b><span>${esc(snip)}</span></div><div class="lv-hit-b">${btns}</div></div>`;
     }).join('') || (q.value.trim() ? '<p class="muted small">Sin coincidencias.</p>' : '');
   }); }
+}
+/* Desplazamiento automático del modo en vivo: velocidad 1 (muy lento) a 10, en píxeles por segundo */
+const autoSpeed = () => 8 + ((S.prefs.liveScroll || 3) - 1) * 6;
+function autoStart(){ const v = S.live; v.autoLast = 0; v.autoAcc = 0; if(!v.autoRaf) v.autoRaf = requestAnimationFrame(autoLoop); }
+function autoLoop(ts){
+  const v = S.live; if(!v) return;
+  v.autoRaf = 0;
+  if(!v.auto || v.autoPaused) return;
+  const el = $('#lvSheet');
+  if(el){
+    v.autoAcc += (v.autoLast ? (ts - v.autoLast) / 1000 : 0) * autoSpeed(); v.autoLast = ts;
+    const step = Math.floor(v.autoAcc); if(step > 0){ el.scrollTop += step; v.autoAcc -= step; }
+    if(el.scrollTop + el.clientHeight >= el.scrollHeight - 2){ v.auto = false; renderLive(true); toast('Fin de la canción'); return; }
+  }
+  v.autoRaf = requestAnimationFrame(autoLoop);
 }
 function closeLive(){ const L = $('#live'); L.hidden = true; L.innerHTML = ''; document.body.style.overflow = ''; try{ S.live && S.live.wake && S.live.wake.release(); }catch(e){} S.live = null; if(S.route.view==='cancion' || S.route.view==='inicio' || S.route.view==='servicio') render(); }
 
@@ -2167,6 +2187,8 @@ const ACT = {
   async rmExamples(b){ if(!armed(b, 'Toca otra vez para quitar los ejemplos')) return; for(const s of S.songs.filter(x=>x.isExample)){ S.index.delete(s.id); await dbDel('songs', s.id); } S.songs = S.songs.filter(x=>!x.isExample); for(const sl of S.setlists.filter(x=>x.isExample)) await dbDel('setlists', sl.id); S.setlists = S.setlists.filter(x=>!x.isExample); render(); toast('Ejemplos eliminados'); },
   /* modo en vivo */
   liveClose: closeLive,
+  liveAuto(){ const v = S.live; if(!v.auto){ v.auto = true; v.autoPaused = false; autoStart(); toast('Toca la letra para pausar'); } else { v.autoPaused = !v.autoPaused; if(!v.autoPaused) autoStart(); } renderLive(true); },
+  liveSpeed(b){ S.prefs.liveScroll = Math.min(10, Math.max(1, (S.prefs.liveScroll || 3) + (+b.dataset.d))); savePrefs(); renderLive(true); },
   liveStep(b){ S.live.semi = Music.semiNorm(S.live.semi + (+b.dataset.d)); renderLive(true); },
   liveKey(b){ const s = songById(S.live.songId); S.live.semi = Music.semiBetween(s.key, {i:+b.dataset.i}); S.live.panel = null; renderLive(true); },
   livePanel(b){ S.live.panel = S.live.panel === b.dataset.v ? null : b.dataset.v; renderLive(true); },
