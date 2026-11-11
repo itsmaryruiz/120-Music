@@ -2107,19 +2107,25 @@ async function syncSendLink(email){
   const here = location.origin + location.pathname;
   await sbAuth('/auth/v1/otp?redirect_to=' + encodeURIComponent(here), {email, create_user:true});
 }
+/* Acepta el enlace tal cual, envuelto por Gmail u Outlook (google.com/url?q=…) o la dirección a la que llevó al abrirlo */
+function authFromText(text){
+  let t = String(text || '').trim();
+  for(let i = 0; i < 3; i++){ try{ const d = decodeURIComponent(t); if(d === t) break; t = d; }catch(e){ break; } }
+  const at = t.indexOf('access_token=');
+  if(at >= 0) return {hash:new URLSearchParams(t.slice(at).split(/[\s"'<>]/)[0].replace(/^[#?]/, ''))};
+  const tok = t.match(/[?&]token=([^&#\s"'<>]+)/), ty = t.match(/[?&]type=([a-z_]+)/);
+  return tok ? {token:tok[1], type:ty ? ty[1] : 'magiclink'} : null;
+}
 async function syncLoginFrom(text){
   text = String(text || '').trim();
-  let hash = '', u = null;
-  try{ u = new URL(text); hash = u.hash.slice(1); }catch(e){}
-  const hp = new URLSearchParams(hash);
-  if(hp.get('access_token')) return syncFromHash(hp);
-  if(u && u.searchParams.get('token')){
-    const type = u.searchParams.get('type') || 'magiclink', token_hash = u.searchParams.get('token');
-    let j; try{ j = await sbAuth('/auth/v1/verify', {type, token_hash}); }catch(e){ j = await sbAuth('/auth/v1/verify', {type:'email', token_hash}); }
+  const a = authFromText(text);
+  if(a && a.hash) return syncFromHash(a.hash);
+  if(a && a.token){
+    let j; try{ j = await sbAuth('/auth/v1/verify', {type:a.type, token_hash:a.token}); }catch(e){ j = await sbAuth('/auth/v1/verify', {type:'email', token_hash:a.token}); }
     syncSetSession(j); return true;
   }
   if(/^\d{6,10}$/.test(text) && Sync.ui.email){ syncSetSession(await sbAuth('/auth/v1/verify', {type:'email', email:Sync.ui.email, token:text})); return true; }
-  throw new Error('Eso no parece el enlace del correo. Mantén presionado “Sign in” → Copiar enlace, y pégalo aquí.');
+  throw new Error(`Lo que se pegó no es el enlace (se pegó: “${text.slice(0, 30)}${text.length > 30 ? '…' : ''}”). Hay que copiar el enlace que está detrás de “Sign in”, no el texto. Mira los pasos de arriba.`);
 }
 async function syncFromHash(hp){
   const at = hp.get('access_token');
@@ -2226,7 +2232,7 @@ function syncCardHTML(){
     <p class="small">Entra con tu correo en cada dispositivo (computadora y teléfono) y tus canciones, listas y documentos se copiarán solos entre ellos.</p>
     ${Sync.err ? `<p class="small"><b style="color:var(--warn)">${esc(Sync.err)}</b></p>` : ''}
     <div class="field"><label for="sy-email">1. Tu correo</label><div class="row" style="flex-wrap:nowrap"><input class="inp" id="sy-email" type="email" autocomplete="email" placeholder="tucorreo@ejemplo.com" value="${esc(Sync.ui.email || '')}"><button class="btn${Sync.ui.sent ? '' : ' pri'}" data-act="syncSend">${Sync.ui.sent ? 'Reenviar' : 'Enviar enlace'}</button></div></div>
-    ${Sync.ui.sent ? `<div class="callout info"><p>Te llegó un correo de <b>Supabase Auth</b> (revisa también “No deseado”).<br>• <b>En la computadora:</b> ábrelo y toca <b>Sign in</b>.<br>• <b>En el iPhone:</b> <u>no lo toques</u>: mantenlo presionado → <b>Copiar enlace</b>, y pégalo abajo.</p></div>
+    ${Sync.ui.sent ? `<div class="callout info"><p>Te llegó un correo de <b>Supabase Auth</b> (revisa también “No deseado”).<br>• <b>En la computadora:</b> ábrelo y toca <b>Sign in</b>.<br>• <b>En el iPhone:</b> <u>no lo toques</u>. Déjalo presionado hasta que salga un menú y elige <b>Copiar enlace</b> (no “Copiar”). Luego pégalo abajo.<br>• <b>Si en el iPhone no te sale “Copiar enlace”:</b> abre ese mismo correo en la computadora, haz clic derecho en <b>Sign in</b> → <b>Copiar enlace</b>, y pégalo aquí en el iPhone (si usan la misma cuenta de Apple, lo copiado en la Mac se puede pegar en el iPhone). El enlace sirve en cualquier aparato, pero <b>una sola vez</b>.</p></div>
     <div class="field"><label for="sy-link">2. Pega aquí el enlace del correo</label><div class="row" style="flex-wrap:nowrap"><input class="inp" id="sy-link" autocomplete="off" placeholder="https://…supabase.co/auth/v1/verify?token=…"><button class="btn pri" data-act="syncLink">Entrar</button></div></div>` : ''}
   </section>`;
 }
