@@ -1177,6 +1177,14 @@ const songById = id => S.songs.find(s => s.id === id);
 async function saveSong(s){ s.updatedAt = Date.now(); if(!S.songs.includes(s)) S.songs.push(s); S.index.set(s.id, buildIndex(s)); await dbPut('songs', s); }
 async function saveSetlist(sl){ sl.updatedAt = Date.now(); if(!S.setlists.includes(sl)) S.setlists.push(sl); await dbPut('setlists', sl); }
 async function savePrefs(){ await dbPut('prefs', S.prefs); }
+/* Apariencia: 'auto' sigue al teléfono; 'light' o 'dark' la fijan. También cambia el color de la barra del sistema. */
+function applyTheme(){
+  const t = S.prefs.theme || 'auto', r = document.documentElement;
+  if(t === 'auto') delete r.dataset.theme; else r.dataset.theme = t;
+  const dark = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+  const m = document.querySelector('meta[name="theme-color"]'); if(m) m.content = dark ? '#0b1020' : '#f4f6fb';
+}
+try{ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme()); }catch(e){}
 function applyNotePrefs(){ const r = document.documentElement; r.dataset.note = S.prefs.noteColor || 'red'; r.dataset.noteItalic = S.prefs.noteItalic === false ? '0' : '1'; }
 function flatHint(song){ let f=0, sh=0; for(const s of song.sections) for(const l of s.lines) for(const c of l.chords){ if(/^[A-G]b/.test(c.raw)) f++; if(/^[A-G]#/.test(c.raw)) sh++; } return f > sh; }
 function edgeChords(song){ const all = []; for(const s of song.sections) for(const l of s.lines) for(const c of [...l.chords].sort((a,b)=>a.pos-b.pos)) if(c.ok) all.push(c.raw); return {first:all[0]||null, last:all[all.length-1]||null}; }
@@ -1527,6 +1535,9 @@ VIEWS.ajustes = () => `
   <section class="card"><h3>Escritura de acordes por defecto</h3>
     <div class="seg">${[['auto','Según la tonalidad'],['sharp','Sostenidos ♯'],['flat','Bemoles ♭']].map(([v,l])=>`<button data-act="prefSpell" data-v="${v}" aria-pressed="${S.prefs.spell===v}">${l}</button>`).join('')}</div>
     <p class="muted small">“Según la tonalidad” usa bemoles en F, B♭, E♭, A♭, D♭ y sus relativas menores, y sostenidos en el resto.</p></section>
+  <section class="card"><h3>Apariencia</h3>
+    <div class="seg">${[['auto','Como el teléfono'],['light','Claro'],['dark','Oscuro']].map(([v,l])=>`<button data-act="prefTheme" data-v="${v}" aria-pressed="${(S.prefs.theme||'auto')===v}">${l}</button>`).join('')}</div>
+    <p class="muted small">“Como el teléfono” cambia sola cuando tu teléfono pasa a modo oscuro. El modo en vivo tiene su propia opción más abajo.</p></section>
   <section class="card"><h3>Notas en las canciones</h3>
     <p class="small">Frases como “Se repite”, “x2” o “(Todos)” se muestran distinto de la letra para que no se canten por error.</p>
     <div class="sheetwrap" style="padding:10px 14px"><pre class="sheet">me quiero mover <i class="note-in">(x2)</i></pre><p class="note" data-align="right">Se repite el coro</p></div>
@@ -2248,6 +2259,7 @@ const ACT = {
   prefSpell(b){ S.prefs.spell = b.dataset.v; savePrefs(); render(); },
   prefSize(b){ S.prefs.liveSize = Math.min(40, Math.max(14, S.prefs.liveSize + (+b.dataset.d))); savePrefs(); render(); },
   prefPal(b){ S.prefs.livePalette = b.dataset.v; savePrefs(); render(); },
+  prefTheme(b){ S.prefs.theme = b.dataset.v; applyTheme(); savePrefs(); render(); },
   prefNoteColor(b){ S.prefs.noteColor = b.dataset.v; applyNotePrefs(); savePrefs(); render(); },
   prefNoteItalic(b){ S.prefs.noteItalic = b.dataset.v === '1'; applyNotePrefs(); savePrefs(); render(); },
   noteLine(b){ markNoteLines(b.dataset.v); },
@@ -2428,7 +2440,7 @@ async function seedExamples(){
   const [songs, sets, prefs] = await Promise.all([dbAll('songs'), dbAll('setlists'), dbAll('prefs')]);
   S.songs = songs; S.setlists = sets; if(prefs[0]) Object.assign(S.prefs, prefs[0]);
   for(const s of S.songs) S.index.set(s.id, buildIndex(s));
-  applyNotePrefs();
+  applyNotePrefs(); applyTheme();
   if(!S.prefs.seeded && !S.songs.length){ await seedExamples(); S.prefs.seeded = true; await savePrefs(); }
   render();
 })();

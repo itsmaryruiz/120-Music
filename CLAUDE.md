@@ -92,7 +92,7 @@ Song = { id, title, artist, key:{i:0-11, minor:bool}|null,
   createdAt, updatedAt, lastOpened, isExample?, meta:{notes:[]} }
 SourceFile = { id, name, ext, size, blob, addedAt, status }
 Setlist = { id, name, date:'YYYY-MM-DD', type, items:[{songId, key, notes, link, transition?:{text, name, from, to}}], isExample? }
-Prefs = { id:'prefs', spell:'auto'|'sharp'|'flat', liveSize, livePalette:'dark'|'light', perPage, seeded, lastBackup?, noteColor:'red'|'blue'|'gray', noteItalic, liveScroll, acc?:{key, moment, level, style, pattern, bpm} }
+Prefs = { id:'prefs', spell:'auto'|'sharp'|'flat', liveSize, livePalette:'dark'|'light', perPage, seeded, lastBackup?, noteColor:'red'|'blue'|'gray', noteItalic, liveScroll, theme:'auto'|'light'|'dark', acc?:{key, moment, level, style, pattern, bpm} }
 Backup = { app:'120 Worship' (también se aceptan copias con '120 Music'), version:1, exportedAt, songs:[Song], setlists:[Setlist], files:[{...SourceFile sin blob, type, data:base64}] }
 ```
 
@@ -117,6 +117,7 @@ Backup = { app:'120 Worship' (también se aceptan copias con '120 Music'), versi
   - **Cómo se publica una actualización:** Claude hace el commit en esta carpeta y la dueña toca **Push origin** en GitHub Desktop (ella maneja la sesión de GitHub; no hay `gh` instalado). Antes de cada publicación hay que subir `VERSION` en `sw.js`.
 - **Diseño:** tipografía Plus Jakarta Sans (Google Fonts) para títulos y texto; JetBrains Mono solo en hojas de acordes y tonos, porque la alineación acorde-sílaba necesita letra monoespaciada. Color principal azul (`--accent` #2563eb en claro, #5b8cff en oscuro). Los colores viven como variables en `:root`; el modo en vivo tiene su propia paleta en `.live`. Ícono: logo "120 Worship" en azul (#2563eb) sobre fondo blanco (`icons/`; `icon-maskable-512.png` tiene más margen para Android). Dentro de la app, `icons/logo.png` (negro sobre transparente, recortado) se muestra con `.logo` como máscara CSS pintada con `--accent`: en el inicio (teléfono) y en la barra lateral (computadora).
 - **App web en vez de Flutter.** La versión actual es una PWA que se publica en **GitHub Pages** y se agrega a la pantalla de inicio del iPhone (Compartir → Agregar a pantalla de inicio). El motor está separado para poder portarlo a Flutter + SQLite si algún día se quiere una app de tienda.
+- **Apariencia:** por defecto sigue al teléfono (claro u oscuro); en Ajustes → Apariencia se puede fijar Claro u Oscuro (`applyTheme`, `data-theme` en `<html>`). El modo en vivo tiene su propia paleta.
 - **Datos locales por dispositivo.** En iPhone, la app instalada en la pantalla de inicio y Safari tienen almacenamiento **separado**. Hay que usar siempre la app instalada.
 - **Sin conexión.** `sw.js` guarda en caché la app, las librerías de cdnjs y las fuentes. **Cada vez que se publique un cambio en index.html, hay que subir el valor de `VERSION` en sw.js** (por ejemplo alabanza-v2 → alabanza-v3) para que los teléfonos reciban la versión nueva.
 
