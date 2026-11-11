@@ -45,13 +45,20 @@ Están hechas las fases 1 a 5 del plan de `docs/PROMPT_ORIGINAL.md`, todas funci
   - En el texto del editor una nota se escribe `{nota: …}`, `{nota-centro: …}` o `{nota-derecha: …}`. `{c: …}` de ChordPro también es nota. Al editar (`bodyOnly`) no se detectan notas solas: así una frase que se desmarcó se queda como letra.
   - Títulos de sección compuestos ("[Intermedio/Instrumental]", "Coro / Chorus") y cualquier título entre corchetes ("[Ministración libre]") son secciones, con el texto tal cual. "Intermedio" es del tipo interludio.
   - Cada tipo de sección tiene su color (etiqueta + raya izquierda): verso oscuro, pre-coro verde azulado, coro azul con fondo, puente violeta, intro/interludio/final gris.
+- **Sincronización entre dispositivos** (Ajustes → Sincronización; sección `SINCRONIZACIÓN` de index.html, objeto `Sync`)
+  - Servidor: Supabase, proyecto `120 Worship` de la dueña (`https://ijknbjmuqdrzcmsuavcn.supabase.co`, plan gratis). Tabla `public.items` (una fila por canción, lista o documento: `kind`, `id`, `data` jsonb, `deleted`, `updated_at`, `server_at`) y bucket privado `files` (`<usuario>/<id>`). Todo protegido con RLS por usuario. El SQL está en `docs/supabase.sql`.
+  - La llave en el código es la **publicable** (pública por diseño). Nunca poner en el repositorio la `secret`/`service_role` ni la contraseña de la base de datos.
+  - **Entrar:** correo → enlace "Sign in" de Supabase. En la computadora se toca el enlace (vuelve a la app con `#access_token`). En el iPhone (app instalada) se mantiene presionado → Copiar enlace → se pega en la app (`syncLoginFrom` usa el `token` del enlace como `token_hash` en `/auth/v1/verify`), porque tocarlo abriría Safari, que guarda aparte. No se usa código de 6 dígitos: Supabase no deja editar las plantillas de correo sin SMTP propio. El correo integrado de Supabase permite **pocos correos por hora**.
+  - **Cómo sincroniza:** cada `dbPut`/`dbDel` de canciones, listas y documentos se anota en `Sync.st.dirty` (en `localStorage` `120w-sync`, junto con la sesión y `lastPull`). `syncNow` sube lo anotado y baja lo nuevo desde `lastPull` (con 5 s de margen). Gana el cambio más reciente (`syncDecide`, en el motor). Los ejemplos y las preferencias no se sincronizan. Se dispara al abrir, 2,5 s después de cada cambio, cada minuto, al volver a la app y al volver la conexión.
+  - `sw.js` no guarda en caché nada de `*.supabase.co`.
+  - Al entrar por primera vez en un dispositivo, se sube todo lo que ya tenía (`syncAfterLogin`).
 - **Copia de seguridad** (en Ajustes)
   - Exporta canciones, listas y documentos originales en un solo `.json` (`120-worship-copia-AAAA-MM-DD.json`). En iPhone se guarda con la hoja de compartir ("Guardar en Archivos"); en computadora se descarga.
   - Restaurar nunca borra: agrega lo que falta, reemplaza una canción o lista solo si la de la copia es más reciente (`updatedAt`) y nunca sobrescribe un documento original. Antes de restaurar muestra un resumen.
   - Ajustes avisa si nunca se hizo copia o si hay cambios después de la última.
 
 **Pendiente**
-- **Fase 6:** sincronización, colaboración en equipo, voz, pedal Bluetooth y audio.
+- **Fase 6:** colaboración en equipo, voz, pedal Bluetooth y audio. (La sincronización entre sus dispositivos ya está hecha.)
 - **OCR** para PDF escaneados: la dueña **no lo quiere por ahora** (solo PDF digitales). Si algún día se hace, que sea gratis y local (tesseract.js).
 
 ## Archivos
@@ -135,12 +142,13 @@ Se probó con un PDF real de la usuaria, "Suelto" de Sarai Rivera. El archivo no
 - **PDF escaneados:** sin OCR por ahora. La canción queda marcada "Sin texto" y el original se puede ver para transcribirla. Con hosting propio, el OCR es posible con tesseract.js, guardando el modelo de idioma español dentro del repositorio para que funcione sin internet. Ver la sección "Próximos pasos".
 - **Archivos .doc antiguos:** no se leen. Se pide guardarlos como .docx.
 - **PDF con muchas canciones:** usar la opción "una canción por página". Todavía no se separan canciones automáticamente dentro de una misma página.
-- **Respaldo:** la copia de seguridad es manual; no hay sincronización automática. Si se borran los datos del navegador y no hay copia, se pierden.
+- **Respaldo:** con la sincronización activa, todo queda también en Supabase. Sin ella, la copia de seguridad es manual.
+- **Supabase gratis se "duerme"** si pasa una semana sin uso: se reactiva desde supabase.com sin perder datos.
 - **Copia con la misma canción importada en dos teléfonos:** si se importó el mismo PDF por separado en cada teléfono, al restaurar quedan dos canciones (tienen id distinto). La detección de duplicados de la biblioteca las señala.
 
 ## Próximos pasos sugeridos
 
-1. **Fase 6:** compartir listas, sincronización y, si algún día lo compra, pedal Bluetooth (se recibe como teclas de flecha o espacio).
+1. **Fase 6:** compartir listas con el equipo (la sincronización ya existe) y, si algún día lo compra, pedal Bluetooth (se recibe como teclas de flecha o espacio).
 2. **OCR (en pausa, la dueña no lo quiere por ahora):** tesseract.js con los archivos dentro del repositorio.
 3. **Librerías locales (opcional):** copiar pdf.js y mammoth a `vendor/` para no depender de cdnjs.
 

@@ -1,6 +1,6 @@
 /* Funcionamiento sin conexión.
    Cambia VERSION cada vez que subas una versión nueva de index.html. */
-const VERSION = 'alabanza-v18';
+const VERSION = 'alabanza-v19';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './icons/icon-maskable-512.png', './icons/logo.png'];
 const LIBS = [
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
@@ -24,6 +24,8 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
+  /* Sincronización (Supabase): nunca se guarda en caché, siempre va directo a internet */
+  if (new URL(req.url).hostname.endsWith('.supabase.co')) return;
   if (req.mode === 'navigate') {
     e.respondWith(fetch(req).then(r => { const copy = r.clone(); caches.open(VERSION).then(c => c.put('./index.html', copy)); return r; })
       .catch(() => caches.match('./index.html')));

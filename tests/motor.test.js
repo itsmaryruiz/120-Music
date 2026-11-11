@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path');
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const eng = html.slice(html.indexOf('/*ENGINE-START*/'), html.indexOf('/*ENGINE-END*/'));
-eval(eng + ';globalThis.E={Music,parseSongText,songToText,itemsToText,searchIndex,buildIndex,checkBackup,planRestore,isNoteText,matchKey,respellSections,transitionOptions,keyRelation,rankByKey,PROGRESSIONS,progressionIn,romanOf,voiceLead,chordTones,barEvents,keyFamily,scaleOf,keySignature,COF,detectPitch,freqToMidi,keysFromHistogram,keyGuess}');
+eval(eng + ';globalThis.E={Music,parseSongText,songToText,itemsToText,searchIndex,buildIndex,checkBackup,planRestore,isNoteText,matchKey,respellSections,transitionOptions,keyRelation,rankByKey,PROGRESSIONS,progressionIn,romanOf,voiceLead,chordTones,barEvents,keyFamily,scaleOf,keySignature,COF,detectPitch,freqToMidi,keysFromHistogram,keyGuess,syncDecide}');
 const {Music} = E; let fail = 0;
 const eq = (a, b, m) => { if (JSON.stringify(a) !== JSON.stringify(b)) { fail++; console.log('FALLA', m, JSON.stringify(a), '≠', JSON.stringify(b)); } else console.log('ok  ', m); };
 const T = (c, s, k) => Music.transposeSym(c, s, Music.flatsFor(k, s, 'auto'), false);
@@ -88,6 +88,17 @@ eq(E.keyGuess(H({0:1,2:1}), 20), null, 'con pocas notas no adivina');
 eq(E.keyGuess(H({0:5,2:2,4:4,5:2,7:4,9:2,11:1}), 3), null, 'con menos de 4 segundos no adivina');
 const g = E.keyGuess(H({0:5,2:2,4:4,5:2,7:4,9:2,11:1}), 20);
 eq([Music.keyName(g.key,'auto'), Music.keyName(g.rel,'auto')], ['C','Am'], 'da el tono y su relativa');
+/* Sincronización */
+const sd = (k, l, r) => E.syncDecide(k, l, r);
+eq(sd('song', null, {updated_at:5}), 'put', 'canción nueva de otro dispositivo: se agrega');
+eq(sd('song', {updatedAt:3}, {updated_at:5}), 'put', 'cambio más reciente de otro dispositivo: se aplica');
+eq(sd('song', {updatedAt:9}, {updated_at:5}), 'skip', 'si aquí hay un cambio más nuevo, no se pisa');
+eq(sd('song', {updatedAt:5}, {updated_at:5}), 'skip', 'mismo cambio: no hace nada');
+eq(sd('song', {updatedAt:3}, {updated_at:5, deleted:true}), 'del', 'borrada en otro dispositivo: se borra aquí');
+eq(sd('song', {updatedAt:9}, {updated_at:5, deleted:true}), 'skip', 'si aquí se editó después del borrado, se conserva');
+eq(sd('setlist', null, {updated_at:5, deleted:true}), 'skip', 'borrado de algo que aquí no existe: nada');
+eq(sd('file', null, {updated_at:1}), 'put', 'documento que falta: se baja');
+eq(sd('file', {id:'x'}, {updated_at:9}), 'skip', 'documento que ya está: no se vuelve a bajar');
 /* Fase 4: transiciones */
 const K = (i, minor=false) => ({i, minor});
 const to = (a, b) => E.transitionOptions(a, b).map(o => [o.id, o.chords.join(' ')]);

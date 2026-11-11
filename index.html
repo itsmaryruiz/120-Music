@@ -476,6 +476,16 @@ function respellSections(sections, key){
 }
 function spellChangesText(ch){ return ch.map(c => `${c.from} → ${c.to}${c.n > 1 ? ` (${c.n} veces)` : ''}`).join(', '); }
 
+/* Sincronización: qué hacer con un cambio que llega de otro dispositivo.
+   Gana el más reciente (updatedAt). Un borrado solo se aplica si aquí no hay un cambio posterior.
+   Los documentos originales no cambian: si ya está aquí, no se vuelve a bajar. */
+function syncDecide(kind, local, row){
+  if(kind === 'file') return row.deleted ? (local ? 'del' : 'skip') : (local ? 'skip' : 'put');
+  const lu = local ? (local.updatedAt || 0) : -1;
+  if(row.deleted) return local && lu <= row.updated_at ? 'del' : 'skip';
+  return !local || row.updated_at > lu ? 'put' : 'skip';
+}
+
 /* Tono para encadenar canciones: el mismo tono que se está tocando; si una es mayor y la otra menor, su relativa (mismas notas: C ↔ Am) */
 function matchKey(songKey, target){
   if(!songKey || !target) return null;
@@ -1161,8 +1171,8 @@ function dbReq(store, mode, fn){
   });
 }
 const dbAll = s => dbReq(s,'readonly', st => st.getAll()).then(r => r || []);
-const dbPut = (s, o) => { if(s==='files' && !DBX.ok) DBX.memFiles.set(o.id, o); return dbReq(s,'readwrite', st => st.put(o)); };
-const dbDel = (s, id) => { if(s==='files') DBX.memFiles.delete(id); return dbReq(s,'readwrite', st => st.delete(id)); };
+const dbPut = (s, o) => { if(s==='files' && !DBX.ok) DBX.memFiles.set(o.id, o); syncTrack(s, o.id, o); return dbReq(s,'readwrite', st => st.put(o)); };
+const dbDel = (s, id) => { if(s==='files') DBX.memFiles.delete(id); syncTrack(s, id, null); return dbReq(s,'readwrite', st => st.delete(id)); };
 const dbGet = async (s, id) => (await dbReq(s,'readonly', st => st.get(id))) || (s==='files' ? DBX.memFiles.get(id) : null);
 
 /* ================= ESTADO ================= */
@@ -1552,6 +1562,7 @@ VIEWS.ajustes = () => `
     <p class="muted small">${pl(S.songs.length,'canción','canciones')} · ${pl(S.setlists.length,'lista','listas')} · ${S.songs.filter(s=>s.isExample).length} de ejemplo</p>
     ${S.songs.some(s=>s.isExample)?`<div><button class="btn danger" data-act="rmExamples">Quitar canciones y lista de ejemplo</button></div>`:''}
   </section>
+  ${syncCardHTML()}
   <section class="card" id="backup"><h3>Copia de seguridad</h3>
     <p class="small">Guarda en un solo archivo tus canciones, listas de servicio y documentos originales. Sirve para no perder nada si cambias de teléfono o se borran los datos, y para pasar tu biblioteca de Safari a la app instalada.</p>
     <p class="small">${backupStatusHTML()}</p>
@@ -2051,6 +2062,175 @@ function markNoteLines(align){
   updateReviewPreview();
 }
 
+/* ================= SINCRONIZACIÓN (Supabase) =================
+   Canciones, listas y documentos originales se copian a la cuenta de la dueña en Supabase y de ahí a sus otros dispositivos.
+   Entra con su correo (enlace "Sign in"). La app sigue funcionando sin internet; al volver la conexión se pone al día.
+   Configuración del servidor: docs/supabase.sql. La llave publicable es pública por diseño (los datos los protege RLS). */
+const SYNC = {url:'https://ijknbjmuqdrzcmsuavcn.supabase.co', key:'sb_publishable_WY7X4zb4UpYiseAIyByTFg_X-wOKMeT'};
+const SYNC_STORE = {song:'songs', setlist:'setlists', file:'files'}, SYNC_KIND = {songs:'song', setlists:'setlist', files:'file'};
+const Sync = {st:null, busy:false, again:false, err:'', applying:false, soon:0, ui:{sent:false}};
+function syncLoad(){ try{ Sync.st = JSON.parse(localStorage.getItem('120w-sync') || 'null'); }catch(e){} if(!Sync.st || typeof Sync.st !== 'object') Sync.st = {}; Sync.st.dirty = Sync.st.dirty || {}; }
+function syncSave(){ try{ localStorage.setItem('120w-sync', JSON.stringify(Sync.st)); }catch(e){} }
+syncLoad();
+const syncOn = () => !!(Sync.st && Sync.st.session);
+/* Cada cambio local queda anotado para subirlo (no los ejemplos, ni lo que llega de otro dispositivo) */
+function syncTrack(store, id, obj){
+  const kind = SYNC_KIND[store]; if(!kind || Sync.applying || !syncOn() || (obj && obj.isExample)) return;
+  Sync.st.dirty[kind + ':' + id] = (obj ? 'p' : 'd') + Date.now(); syncSave(); syncSoon();
+}
+function syncSoon(){ clearTimeout(Sync.soon); Sync.soon = setTimeout(syncNow, 2500); }
+async function sbAuth(path, body){
+  const r = await fetch(SYNC.url + path, {method:'POST', headers:{apikey:SYNC.key, 'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const j = await r.json().catch(() => ({}));
+  if(!r.ok){ const e = new Error(j.msg || j.error_description || j.message || j.error || ('Error ' + r.status)); e.status = r.status; throw e; }
+  return j;
+}
+function syncSetSession(j){
+  Sync.st.session = {access_token:j.access_token, refresh_token:j.refresh_token, expires_at:+j.expires_at || Math.floor(Date.now() / 1000) + (+j.expires_in || 3600), user:{id:j.user.id, email:j.user.email}};
+  syncSave();
+}
+async function sbToken(){
+  const s = Sync.st.session; if(!s) return null;
+  if(Date.now() / 1000 < s.expires_at - 60) return s.access_token;
+  try{ syncSetSession(await sbAuth('/auth/v1/token?grant_type=refresh_token', {refresh_token:s.refresh_token})); }
+  catch(e){ if(e.status === 400 || e.status === 401){ Sync.st.session = null; syncSave(); Sync.err = 'La sesión se cerró. Vuelve a entrar con tu correo.'; } return null; }
+  return Sync.st.session.access_token;
+}
+async function sbFetch(path, opts = {}){
+  const t = await sbToken(); if(!t) throw Object.assign(new Error('Sin sesión'), {status:401});
+  const r = await fetch(SYNC.url + path, {...opts, headers:{apikey:SYNC.key, Authorization:'Bearer ' + t, ...(opts.headers || {})}});
+  if(!r.ok){ let m = ''; try{ const j = await r.json(); m = j.message || j.msg || j.error; }catch(e){} throw Object.assign(new Error(m || ('Error ' + r.status)), {status:r.status}); }
+  return r;
+}
+/* Entrar: se pide el enlace por correo; luego se abre (computadora) o se pega en la app (iPhone) */
+async function syncSendLink(email){
+  const here = location.origin + location.pathname;
+  await sbAuth('/auth/v1/otp?redirect_to=' + encodeURIComponent(here), {email, create_user:true});
+}
+async function syncLoginFrom(text){
+  text = String(text || '').trim();
+  let hash = '', u = null;
+  try{ u = new URL(text); hash = u.hash.slice(1); }catch(e){}
+  const hp = new URLSearchParams(hash);
+  if(hp.get('access_token')) return syncFromHash(hp);
+  if(u && u.searchParams.get('token')){
+    const type = u.searchParams.get('type') || 'magiclink', token_hash = u.searchParams.get('token');
+    let j; try{ j = await sbAuth('/auth/v1/verify', {type, token_hash}); }catch(e){ j = await sbAuth('/auth/v1/verify', {type:'email', token_hash}); }
+    syncSetSession(j); return true;
+  }
+  if(/^\d{6,10}$/.test(text) && Sync.ui.email){ syncSetSession(await sbAuth('/auth/v1/verify', {type:'email', email:Sync.ui.email, token:text})); return true; }
+  throw new Error('Eso no parece el enlace del correo. Mantén presionado “Sign in” → Copiar enlace, y pégalo aquí.');
+}
+async function syncFromHash(hp){
+  const at = hp.get('access_token');
+  const r = await fetch(SYNC.url + '/auth/v1/user', {headers:{apikey:SYNC.key, Authorization:'Bearer ' + at}});
+  if(!r.ok) throw new Error('El enlace ya no sirve. Pide uno nuevo.');
+  const user = await r.json();
+  syncSetSession({access_token:at, refresh_token:hp.get('refresh_token'), expires_at:hp.get('expires_at'), expires_in:hp.get('expires_in'), user});
+  return true;
+}
+/* Al entrar por primera vez en un dispositivo: subir todo lo que ya tiene y bajar todo lo de la cuenta */
+async function syncAfterLogin(){
+  Sync.st.dirty = {}; Sync.st.lastPull = null;
+  for(const x of S.songs) if(!x.isExample) Sync.st.dirty['song:' + x.id] = 'p' + Date.now();
+  for(const x of S.setlists) if(!x.isExample) Sync.st.dirty['setlist:' + x.id] = 'p' + Date.now();
+  for(const id of await storedFileIds()) Sync.st.dirty['file:' + id] = 'p' + Date.now();
+  syncSave(); Sync.ui = {sent:false}; Sync.err = '';
+  toast('Sesión iniciada: sincronizando…'); if(S.route.view === 'ajustes') render();
+  await syncNow();
+}
+async function syncPush(uid){
+  const entries = Object.entries(Sync.st.dirty); if(!entries.length) return;
+  const rows = [], done = [];
+  for(const [k, v] of entries){
+    const i = k.indexOf(':'), kind = k.slice(0, i), id = k.slice(i + 1), store = SYNC_STORE[kind];
+    const gone = {user_id:uid, kind, id, data:null, deleted:true, updated_at:Date.now()};
+    const o = v[0] === 'd' ? null : await dbGet(store, id);
+    if(!o){ rows.push(gone); if(kind === 'file') await sbFetch(`/storage/v1/object/files/${uid}/${encodeURIComponent(id)}`, {method:'DELETE'}).catch(() => {}); }
+    else if(o.isExample){ /* los ejemplos no se sincronizan */ }
+    else if(kind === 'file'){
+      if(o.blob) await sbFetch(`/storage/v1/object/files/${uid}/${encodeURIComponent(id)}`, {method:'POST', headers:{'x-upsert':'true', 'Content-Type':o.blob.type || 'application/octet-stream'}, body:o.blob});
+      const {blob, ...meta} = o; rows.push({user_id:uid, kind, id, data:meta, deleted:false, updated_at:o.addedAt || 0});
+    }
+    else rows.push({user_id:uid, kind, id, data:o, deleted:false, updated_at:o.updatedAt || 0});
+    done.push([k, v]);
+  }
+  for(let i = 0; i < rows.length; i += 50)
+    await sbFetch('/rest/v1/items?on_conflict=user_id,kind,id', {method:'POST', headers:{'Content-Type':'application/json', Prefer:'resolution=merge-duplicates,return=minimal'}, body:JSON.stringify(rows.slice(i, i + 50))});
+  for(const [k, v] of done) if(Sync.st.dirty[k] === v) delete Sync.st.dirty[k];
+  syncSave();
+}
+async function syncPull(uid){
+  const since = Sync.st.lastPull ? new Date(new Date(Sync.st.lastPull).getTime() - 5000).toISOString() : null;
+  let maxSeen = Sync.st.lastPull, changed = 0;
+  for(let off = 0; ; off += 500){
+    const r = await sbFetch(`/rest/v1/items?select=kind,id,data,deleted,updated_at,server_at&order=server_at.asc&limit=500&offset=${off}` + (since ? `&server_at=gte.${encodeURIComponent(since)}` : ''));
+    const rows = await r.json();
+    for(const row of rows){
+      if(!maxSeen || row.server_at > maxSeen) maxSeen = row.server_at;
+      if(Sync.st.dirty[row.kind + ':' + row.id]) continue; /* aquí hay un cambio sin subir: gana el de aquí */
+      const store = SYNC_STORE[row.kind]; if(!store) continue;
+      const local = row.kind === 'song' ? songById(row.id) : row.kind === 'setlist' ? S.setlists.find(x => x.id === row.id) : await dbGet('files', row.id);
+      const what = syncDecide(row.kind, local, row);
+      if(what === 'skip') continue;
+      Sync.applying = true;
+      try{
+        if(row.kind === 'file'){
+          if(what === 'del') await dbDel('files', row.id);
+          else { const b = await (await sbFetch(`/storage/v1/object/authenticated/files/${uid}/${encodeURIComponent(row.id)}`)).blob(); await dbPut('files', {...row.data, blob:b}); }
+        } else {
+          const list = row.kind === 'song' ? S.songs : S.setlists, ix = list.findIndex(x => x.id === row.id);
+          if(what === 'del'){ if(ix >= 0) list.splice(ix, 1); if(row.kind === 'song') S.index.delete(row.id); await dbDel(store, row.id); }
+          else { if(ix >= 0) list[ix] = row.data; else list.push(row.data); if(row.kind === 'song') S.index.set(row.id, buildIndex(row.data)); await dbPut(store, row.data); }
+        }
+        changed++;
+      } finally { Sync.applying = false; }
+    }
+    if(rows.length < 500) break;
+  }
+  Sync.st.lastPull = maxSeen; syncSave();
+  return changed;
+}
+async function syncNow(){
+  clearTimeout(Sync.soon);
+  if(!syncOn() || !navigator.onLine) return syncPaint();
+  if(Sync.busy){ Sync.again = true; return; }
+  Sync.busy = true; syncPaint();
+  try{
+    const uid = Sync.st.session.user.id;
+    await syncPush(uid);
+    const changed = await syncPull(uid);
+    Sync.st.lastSync = Date.now(); Sync.err = ''; syncSave();
+    if(changed && !S.live && !['revisar','conectar'].includes(S.route.view) && !(document.activeElement && document.activeElement.matches('input,textarea,select'))) render();
+  } catch(e){
+    Sync.err = e.status === 401 ? 'La sesión se cerró. Vuelve a entrar con tu correo.' : 'No se pudo sincronizar (' + (e.message || 'sin conexión') + '). Se reintentará solo.';
+  } finally {
+    Sync.busy = false; syncPaint();
+    if(Sync.again){ Sync.again = false; syncSoon(); }
+  }
+}
+const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'hace un momento' : m < 60 ? `hace ${m} min` : `hace ${Math.round(m / 60)} h`; };
+function syncStatusHTML(){
+  if(!syncOn()) return '';
+  const pend = Object.keys(Sync.st.dirty).length;
+  return `${Sync.busy ? '<b>Sincronizando…</b>' : Sync.st.lastSync ? `Última sincronización: ${ago(Sync.st.lastSync)}.` : 'Todavía no se ha sincronizado.'}${pend && !Sync.busy ? ` ${pl(pend, 'cambio', 'cambios')} por subir${navigator.onLine ? '' : ' (sin internet)'}.` : ''}${Sync.err ? `<br><b style="color:var(--warn)">${esc(Sync.err)}</b>` : ''}`;
+}
+function syncPaint(){ const el = $('#sync-status'); if(el) el.innerHTML = syncStatusHTML(); }
+function syncCardHTML(){
+  if(syncOn()) return `<section class="card" id="sync"><h3>Sincronización</h3>
+    <p class="small">Conectada como <b>${esc(Sync.st.session.user.email || '')}</b>. Tus canciones, listas y documentos se copian solos a tus otros dispositivos.</p>
+    <p class="small" id="sync-status">${syncStatusHTML()}</p>
+    <div class="row"><button class="btn pri" data-act="syncNow">Sincronizar ahora</button><button class="btn" data-act="syncOut">Cerrar sesión</button></div>
+    <p class="muted small">Las canciones de ejemplo no se sincronizan. La app sigue funcionando sin internet: al volver la conexión, se pone al día.</p></section>`;
+  return `<section class="card" id="sync"><h3>Sincronización</h3>
+    <p class="small">Entra con tu correo en cada dispositivo (computadora y teléfono) y tus canciones, listas y documentos se copiarán solos entre ellos.</p>
+    ${Sync.err ? `<p class="small"><b style="color:var(--warn)">${esc(Sync.err)}</b></p>` : ''}
+    <div class="field"><label for="sy-email">1. Tu correo</label><div class="row" style="flex-wrap:nowrap"><input class="inp" id="sy-email" type="email" autocomplete="email" placeholder="tucorreo@ejemplo.com" value="${esc(Sync.ui.email || '')}"><button class="btn${Sync.ui.sent ? '' : ' pri'}" data-act="syncSend">${Sync.ui.sent ? 'Reenviar' : 'Enviar enlace'}</button></div></div>
+    ${Sync.ui.sent ? `<div class="callout info"><p>Te llegó un correo de <b>Supabase Auth</b> (revisa también “No deseado”).<br>• <b>En la computadora:</b> ábrelo y toca <b>Sign in</b>.<br>• <b>En el iPhone:</b> <u>no lo toques</u>: mantenlo presionado → <b>Copiar enlace</b>, y pégalo abajo.</p></div>
+    <div class="field"><label for="sy-link">2. Pega aquí el enlace del correo</label><div class="row" style="flex-wrap:nowrap"><input class="inp" id="sy-link" autocomplete="off" placeholder="https://…supabase.co/auth/v1/verify?token=…"><button class="btn pri" data-act="syncLink">Entrar</button></div></div>` : ''}
+  </section>`;
+}
+
 /* ================= COPIA DE SEGURIDAD ================= */
 const pl = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const fmtSize = n => n < 1e6 ? Math.max(1, Math.round(n/1e3)) + ' KB' : (n/1e6).toFixed(1).replace('.', ',') + ' MB';
@@ -2259,6 +2439,21 @@ const ACT = {
   prefSpell(b){ S.prefs.spell = b.dataset.v; savePrefs(); render(); },
   prefSize(b){ S.prefs.liveSize = Math.min(40, Math.max(14, S.prefs.liveSize + (+b.dataset.d))); savePrefs(); render(); },
   prefPal(b){ S.prefs.livePalette = b.dataset.v; savePrefs(); render(); },
+  async syncSend(b){
+    const email = $('#sy-email').value.trim(); if(!/^\S+@\S+\.\S+$/.test(email)) return toast('Escribe tu correo completo');
+    b.disabled = true; b.textContent = 'Enviando…';
+    try{ await syncSendLink(email); Sync.ui = {sent:true, email}; Sync.err = ''; toast('Te enviamos el correo'); }
+    catch(e){ Sync.err = /rate|seconds|too many/i.test(e.message) ? 'Se pidieron muchos correos seguidos. Espera unos minutos y vuelve a intentar.' : 'No se pudo enviar el correo: ' + e.message; }
+    render();
+  },
+  async syncLink(b){
+    const v = $('#sy-link').value; if(!v.trim()) return toast('Pega primero el enlace del correo');
+    b.disabled = true; b.textContent = 'Entrando…';
+    try{ await syncLoginFrom(v); await syncAfterLogin(); }
+    catch(e){ Sync.err = /expired|invalid|not found|ya no sirve/i.test(e.message) ? 'Ese enlace ya no sirve (se usa una sola vez y vence pronto). Pide uno nuevo con “Reenviar”.' : e.message; render(); }
+  },
+  syncNow(){ syncNow(); },
+  syncOut(b){ if(!armed(b, 'Toca otra vez para cerrar sesión')) return; Sync.st = {dirty:{}}; Sync.ui = {sent:false}; Sync.err = ''; syncSave(); render(); toast('Sesión cerrada. Tus canciones siguen en este dispositivo.'); },
   prefTheme(b){ S.prefs.theme = b.dataset.v; applyTheme(); savePrefs(); render(); },
   prefNoteColor(b){ S.prefs.noteColor = b.dataset.v; applyNotePrefs(); savePrefs(); render(); },
   prefNoteItalic(b){ S.prefs.noteItalic = b.dataset.v === '1'; applyNotePrefs(); savePrefs(); render(); },
@@ -2441,8 +2636,18 @@ async function seedExamples(){
   S.songs = songs; S.setlists = sets; if(prefs[0]) Object.assign(S.prefs, prefs[0]);
   for(const s of S.songs) S.index.set(s.id, buildIndex(s));
   applyNotePrefs(); applyTheme();
+  if(/access_token=|error_description=/.test(location.hash)){
+    const hp = new URLSearchParams(location.hash.slice(1)); history.replaceState(null, '', location.pathname + location.search);
+    if(hp.get('access_token')){ try{ await syncFromHash(hp); setTimeout(syncAfterLogin, 0); }catch(e){ Sync.err = e.message; } }
+    else Sync.err = 'Ese enlace ya no sirve (se usa una sola vez y vence pronto). Pide uno nuevo en Ajustes → Sincronización.';
+    if(Sync.err) S.route = {view:'ajustes', params:{}};
+  }
   if(!S.prefs.seeded && !S.songs.length){ await seedExamples(); S.prefs.seeded = true; await savePrefs(); }
   render();
+  if(syncOn()) syncNow();
+  window.addEventListener('online', () => syncNow());
+  document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') syncNow(); });
+  setInterval(() => { if(document.visibilityState === 'visible') syncNow(); }, 60000);
 })();
 </script>
 
