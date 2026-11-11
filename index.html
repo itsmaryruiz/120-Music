@@ -253,6 +253,8 @@ pre.sheet .c.bad{color:var(--warn);text-decoration:underline dotted;text-underli
 .cof-seg[data-act]{cursor:pointer}
 /* Detectar tono */
 .det{display:flex;flex-direction:column;gap:8px}
+.handoff p{font-size:16px}
+.handoff .btn.big{align-self:flex-start}
 .det-note{font-family:var(--f-mono);font-weight:800;font-size:clamp(40px,12vw,64px);text-align:center;color:var(--chord);line-height:1.1;min-height:1.1em}
 .det-meter{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}
 .det-meter i{display:block;height:100%;width:0;background:var(--accent);transition:width .08s}
@@ -2215,6 +2217,20 @@ async function syncNow(){
     if(Sync.again){ Sync.again = false; syncSoon(); }
   }
 }
+/* En el iPhone, la app instalada y Safari guardan sus datos por separado: el enlace del correo se abre en Safari,
+   así que ahí se ofrece copiarlo con un toque y pegarlo en la app instalada con otro toque. */
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isStandalone = () => navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+VIEWS.enlace = () => `
+  <header class="ph"><div><p class="eyebrow">Sincronización</p><h1>Ya casi</h1></div></header>
+  <section class="card handoff">
+    <p><b>1.</b> Toca este botón:</p>
+    <button class="btn pri big" data-act="handoffCopy">Copiar para la app</button>
+    <p><b>2.</b> Abre la app <b>120 Worship</b> desde tu pantalla de inicio.</p>
+    <p><b>3.</b> En <b>Ajustes → Sincronización</b>, toca <b>Pegar y entrar</b> (si el iPhone pregunta, toca <b>Pegar</b>).</p>
+    <p class="muted small">Esto es porque en el iPhone la app instalada y Safari guardan sus datos por separado.</p>
+  </section>
+  <p class="small"><button class="linkbtn" data-act="handoffHere">Prefiero usar 120 Worship aquí en Safari</button></p>`;
 const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'hace un momento' : m < 60 ? `hace ${m} min` : `hace ${Math.round(m / 60)} h`; };
 function syncStatusHTML(){
   if(!syncOn()) return '';
@@ -2232,7 +2248,10 @@ function syncCardHTML(){
     <p class="small">Entra con tu correo en cada dispositivo (computadora y teléfono) y tus canciones, listas y documentos se copiarán solos entre ellos.</p>
     ${Sync.err ? `<p class="small"><b style="color:var(--warn)">${esc(Sync.err)}</b></p>` : ''}
     <div class="field"><label for="sy-email">1. Tu correo</label><div class="row" style="flex-wrap:nowrap"><input class="inp" id="sy-email" type="email" autocomplete="email" placeholder="tucorreo@ejemplo.com" value="${esc(Sync.ui.email || '')}"><button class="btn${Sync.ui.sent ? '' : ' pri'}" data-act="syncSend">${Sync.ui.sent ? 'Reenviar' : 'Enviar enlace'}</button></div></div>
-    ${Sync.ui.sent ? `<div class="callout info"><p>Te llegó un correo de <b>Supabase Auth</b> (revisa también “No deseado”).<br>• <b>En la computadora:</b> ábrelo y toca <b>Sign in</b>.<br>• <b>En el iPhone:</b> <u>no lo toques</u>. Déjalo presionado hasta que salga un menú y elige <b>Copiar enlace</b> (no “Copiar”). Luego pégalo abajo.<br>• <b>Si en el iPhone no te sale “Copiar enlace”:</b> abre ese mismo correo en la computadora, haz clic derecho en <b>Sign in</b> → <b>Copiar enlace</b>, y pégalo aquí en el iPhone (si usan la misma cuenta de Apple, lo copiado en la Mac se puede pegar en el iPhone). El enlace sirve en cualquier aparato, pero <b>una sola vez</b>.</p></div>
+    ${Sync.ui.sent && isIOS() ? `<div class="callout info"><p>Te llegó un correo de <b>Supabase Auth</b> (revisa también “No deseado”).<br><b>1.</b> Tócale <b>Sign in</b>: se abre Safari.<br><b>2.</b> Ahí toca <b>Copiar para la app</b>.<br><b>3.</b> Vuelve aquí y toca:</p></div>
+    <div><button class="btn pri big" data-act="syncPaste">Pegar y entrar</button></div>
+    <details><summary class="small muted">¿No funciona? Pegar a mano</summary><div class="row" style="flex-wrap:nowrap;margin-top:6px"><input class="inp" id="sy-link" autocomplete="off" placeholder="Pega aquí lo copiado"><button class="btn" data-act="syncLink">Entrar</button></div></details>` : ''}
+    ${Sync.ui.sent && !isIOS() ? `<div class="callout info"><p>Te llegó un correo de <b>Supabase Auth</b> (revisa también “No deseado”).<br>• <b>En la computadora:</b> ábrelo y toca <b>Sign in</b>.<br>• <b>En el iPhone:</b> <u>no lo toques</u>. Déjalo presionado hasta que salga un menú y elige <b>Copiar enlace</b> (no “Copiar”). Luego pégalo abajo.<br>• <b>Si en el iPhone no te sale “Copiar enlace”:</b> abre ese mismo correo en la computadora, haz clic derecho en <b>Sign in</b> → <b>Copiar enlace</b>, y pégalo aquí en el iPhone (si usan la misma cuenta de Apple, lo copiado en la Mac se puede pegar en el iPhone). El enlace sirve en cualquier aparato, pero <b>una sola vez</b>.</p></div>
     <div class="field"><label for="sy-link">2. Pega aquí el enlace del correo</label><div class="row" style="flex-wrap:nowrap"><input class="inp" id="sy-link" autocomplete="off" placeholder="https://…supabase.co/auth/v1/verify?token=…"><button class="btn pri" data-act="syncLink">Entrar</button></div></div>` : ''}
   </section>`;
 }
@@ -2458,6 +2477,18 @@ const ACT = {
     try{ await syncLoginFrom(v); await syncAfterLogin(); }
     catch(e){ Sync.err = /expired|invalid|not found|ya no sirve/i.test(e.message) ? 'Ese enlace ya no sirve (se usa una sola vez y vence pronto). Pide uno nuevo con “Reenviar”.' : e.message; render(); }
   },
+  async syncPaste(b){
+    let t = '';
+    try{ t = await navigator.clipboard.readText(); }catch(e){ Sync.err = 'El iPhone no dejó pegar. Abre “¿No funciona? Pegar a mano”, mantén el dedo en el cuadro y toca Pegar.'; return render(); }
+    b.disabled = true; b.textContent = 'Entrando…';
+    try{ await syncLoginFrom(t); await syncAfterLogin(); }
+    catch(e){ Sync.err = /expired|invalid|not found|ya no sirve/i.test(e.message) ? 'Ese enlace ya no sirve (se usa una sola vez y vence pronto). Pide uno nuevo con “Reenviar”.' : 'Lo copiado no es el enlace. Primero toca “Sign in” en el correo y luego “Copiar para la app” en Safari.'; render(); }
+  },
+  async handoffCopy(b){
+    try{ await navigator.clipboard.writeText(Sync.handoff); b.textContent = '✓ Copiado. Ahora abre la app 120 Worship'; b.disabled = true; }
+    catch(e){ b.insertAdjacentHTML('afterend', `<textarea class="inp" style="min-height:90px;margin-top:8px" readonly>${esc(Sync.handoff)}</textarea><p class="small">Mantén el dedo en el cuadro → Seleccionar todo → Copiar.</p>`); }
+  },
+  async handoffHere(){ try{ await syncFromHash(new URLSearchParams(new URL(Sync.handoff).hash.slice(1))); Sync.handoff = null; S.stack = []; go('ajustes', {}, false); await syncAfterLogin(); }catch(e){ Sync.err = e.message; go('ajustes', {}, false); } },
   syncNow(){ syncNow(); },
   syncOut(b){ if(!armed(b, 'Toca otra vez para cerrar sesión')) return; Sync.st = {dirty:{}}; Sync.ui = {sent:false}; Sync.err = ''; syncSave(); render(); toast('Sesión cerrada. Tus canciones siguen en este dispositivo.'); },
   prefTheme(b){ S.prefs.theme = b.dataset.v; applyTheme(); savePrefs(); render(); },
@@ -2643,8 +2674,9 @@ async function seedExamples(){
   for(const s of S.songs) S.index.set(s.id, buildIndex(s));
   applyNotePrefs(); applyTheme();
   if(/access_token=|error_description=/.test(location.hash)){
-    const hp = new URLSearchParams(location.hash.slice(1)); history.replaceState(null, '', location.pathname + location.search);
-    if(hp.get('access_token')){ try{ await syncFromHash(hp); setTimeout(syncAfterLogin, 0); }catch(e){ Sync.err = e.message; } }
+    const full = location.href, hp = new URLSearchParams(location.hash.slice(1)); history.replaceState(null, '', location.pathname + location.search);
+    if(hp.get('access_token') && isIOS() && !isStandalone()){ Sync.handoff = full; S.route = {view:'enlace', params:{}}; }
+    else if(hp.get('access_token')){ try{ await syncFromHash(hp); setTimeout(syncAfterLogin, 0); }catch(e){ Sync.err = e.message; } }
     else Sync.err = 'Ese enlace ya no sirve (se usa una sola vez y vence pronto). Pide uno nuevo en Ajustes → Sincronización.';
     if(Sync.err) S.route = {view:'ajustes', params:{}};
   }
