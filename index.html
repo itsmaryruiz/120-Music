@@ -254,6 +254,7 @@ pre.sheet .c.bad{color:var(--warn);text-decoration:underline dotted;text-underli
 /* Detectar tono */
 .det{display:flex;flex-direction:column;gap:8px}
 .handoff p{font-size:16px}
+.keyhelp{display:flex;flex-direction:column;gap:6px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);color:var(--muted)}
 .handoff .btn.big{align-self:flex-start}
 .det-note{font-family:var(--f-mono);font-weight:800;font-size:clamp(40px,12vw,64px);text-align:center;color:var(--chord);line-height:1.1;min-height:1.1em}
 .det-meter{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}
@@ -430,7 +431,9 @@ const Music = (() => {
     const q = m[3]||'';
     return {i:mod(BASE[m[1].toUpperCase()] + accVal(m[2]||'')), minor: q!=='M' && /^(m|min|minor|menor)$/i.test(q)};
   }
-  /* Estima la tonalidad a partir de los acordes (orden de aparición). Siempre requiere confirmación. */
+  /* Estima la tonalidad a partir de los acordes (orden de aparición).
+     'alta' solo si la evidencia es clara: al menos 8 acordes, casi todos del tono, y empieza o termina en él.
+     Si no, 'media' o 'baja' y la revisión lo marca. `why` explica en palabras por qué. */
   function estimateKey(list){
     const chords = list.map(parse).filter(Boolean);
     if(!chords.length) return null;
@@ -449,7 +452,14 @@ const Music = (() => {
       scores.push({key:{i:k,minor}, s});
     }
     scores.sort((a,b)=>b.s-a.s);
-    return {key:scores[0].key, conf: (scores[0].s - scores[1].s) >= 2 ? 'media' : 'baja'};
+    const best = scores[0].key, margin = scores[0].s - scores[1].s, deg = best.minor ? MIN : MAJ;
+    const fit = chords.filter(c => { const rel = mod(c.root - best.i), t = triad(c.qual); return deg.some(([d,q]) => d===rel && (q===t || t==='sus')); }).length / chords.length;
+    const isTonic = c => c.root===best.i && (best.minor ? triad(c.qual)==='min' : ['maj','sus'].includes(triad(c.qual)));
+    const starts = isTonic(chords[0]), ends = isTonic(chords[chords.length-1]);
+    const conf = chords.length >= 8 && fit >= .9 && margin >= 3 && (starts || ends) ? 'alta' : margin >= 2 ? 'media' : 'baja';
+    const name = keyName(best), parts = [`${Math.round(fit * 100)}% de los acordes son de ${name}`];
+    if(starts && ends) parts.push(`empieza y termina en ${name}`); else if(starts) parts.push(`empieza en ${name}`); else if(ends) parts.push(`termina en ${name}`);
+    return {key:best, conf, why:parts.join(' y ')};
   }
   function semiNorm(d){ d = mod(d); return d > 6 ? d - 12 : d; }
   function semiLabel(d){
@@ -928,7 +938,7 @@ function parseSongText(text, {bodyOnly=false, fileName='', autoNotes=!bodyOnly} 
     for(const c of [...ln.chords].sort((x,y)=>x.pos-y.pos)){ if(c.ok) allChords.push(c.raw); else unknown.push(c.raw); }
     if(ln.lyric.trim() && !ln.note) lyricLines++;
   }
-  if(!meta.key && !bodyOnly){ const e = Music.estimateKey(allChords); if(e){ meta.key = e.key; meta.conf.key = e.conf; } }
+  if(!meta.key && !bodyOnly){ const e = Music.estimateKey(allChords); if(e){ meta.key = e.key; meta.conf.key = e.conf; meta.keyWhy = e.why; } }
   return {meta, sections:secs, stats:{chords:allChords.length, unknown:[...new Set(unknown)], lyricLines}};
 }
 function chordLineStr(chords){
@@ -1517,6 +1527,22 @@ VIEWS.importar = () => `
   </form>
   <div class="callout info"><p>PDF escaneado (páginas como imagen): esta versión no incluye reconocimiento de texto (OCR). Se guarda el original y la canción queda marcada “Sin texto” para que la transcribas viendo las páginas.</p></div>`;
 
+/* Tonalidad en la revisión: si se dedujo por los acordes, se dice por qué; si hay dudas, se ofrece comprobarla afuera */
+function keyConfHTML(s){
+  const c = (s.conf || {}).key, why = s.meta && s.meta.keyWhy;
+  if(c === 'alta') return `<span class="conf" style="color:var(--ok)">${why ? 'Detectado por los acordes' : 'Detectado con seguridad'}</span>`;
+  if(c === 'media') return `<span class="conf" style="color:var(--warn)">Probable: compruébalo</span>`;
+  return `<span class="conf" style="color:var(--warn)">${s.key ? 'Dudoso: compruébalo' : 'No se pudo saber'}</span>`;
+}
+function keyHelpHTML(s){
+  const c = (s.conf || {}).key, why = s.meta && s.meta.keyWhy;
+  if(c === 'alta' && !why) return '';
+  const q = [s.title, s.artist].filter(Boolean).join(' ');
+  const links = q ? `<a class="btn sm" href="https://www.google.com/search?q=${encodeURIComponent(q + ' tono acordes')}" target="_blank" rel="noopener noreferrer">Buscar el tono ↗</a><a class="btn sm" href="https://www.youtube.com/results?search_query=${encodeURIComponent(q)}" target="_blank" rel="noopener noreferrer">Escuchar en YouTube ↗</a>` : '';
+  const k = s.key ? esc(Music.keyName(s.key, 'auto')) : '';
+  if(c === 'alta') return `<div class="keyhelp small"><span>Elegido así porque ${esc(why)}.</span></div>`;
+  return `<div class="keyhelp small"><span>${s.key ? `Parece ${k}${why ? ` porque ${esc(why)}` : ''}, pero no es seguro.` : 'El documento no dice el tono y los acordes no alcanzan para saberlo.'} Compruébalo y, si hace falta, cámbialo arriba:</span><div class="row">${links}</div></div>`;
+}
 VIEWS.revisar = () => {
   const R = S.review; const s = songById(R.queue[R.pos]);
   if(!s) return `<div class="empty">No hay canciones por revisar. <button class="linkbtn" data-tab="biblioteca">Ir a la biblioteca</button></div>`;
@@ -1531,9 +1557,9 @@ VIEWS.revisar = () => {
   <section class="card"><div class="grid2">
     <div class="field"><label for="rv-title">Título ${cb(conf.title)}</label><input class="inp" id="rv-title" value="${esc(s.title)}"></div>
     <div class="field"><label for="rv-artist">Artista ${cb(conf.artist)}</label><input class="inp" id="rv-artist" value="${esc(s.artist)}" placeholder="Artista o intérprete"></div>
-    <div class="field"><label for="rv-key">Tonalidad original ${cb(conf.key)}</label><div class="row" style="flex-wrap:nowrap"><select class="inp" id="rv-key"><option value="">Desconocida</option>${ROOTS.map(i=>`<option value="${i}"${s.key&&s.key.i===i?' selected':''}>${esc(Music.spell(i, [1,3,8,10].includes(i)))}</option>`).join('')}</select><select class="inp" id="rv-mode"><option value="maj"${s.key&&!s.key.minor?' selected':''}>mayor</option><option value="min"${s.key&&s.key.minor?' selected':''}>menor</option></select></div></div>
+    <div class="field"><label for="rv-key">Tonalidad original ${keyConfHTML(s)}</label><div class="row" style="flex-wrap:nowrap"><select class="inp" id="rv-key"><option value="">Desconocida</option>${ROOTS.map(i=>`<option value="${i}"${s.key&&s.key.i===i?' selected':''}>${esc(Music.spell(i, [1,3,8,10].includes(i)))}</option>`).join('')}</select><select class="inp" id="rv-mode"><option value="maj"${s.key&&!s.key.minor?' selected':''}>mayor</option><option value="min"${s.key&&s.key.minor?' selected':''}>menor</option></select></div></div>
     <div class="field"><label for="rv-tags">Etiquetas o carpetas</label><input class="inp" id="rv-tags" value="${esc((s.tags||[]).join(', '))}" placeholder="adoración, júbilo, Navidad"></div>
-  </div></section>
+  </div>${keyHelpHTML(s)}</section>
   <div class="cols">
     <div class="field"><label for="rv-text">Letra y acordes (los acordes van en la línea de arriba; las secciones entre corchetes)</label>
       <div class="notebar"><span class="small muted">Poner la línea donde está el cursor como nota:</span>
@@ -1976,7 +2002,7 @@ function songFromText(text, {title='', fileName='', sourceName='', fileId=null}=
   /* Si la tonalidad se detectó con seguridad, se corrige la escritura de los acordes (A# en Dm → Bb) y se avisa en la revisión */
   const fix = p.meta.key && conf.key !== 'baja' ? respellSections(p.sections, p.meta.key) : {sections:p.sections, changes:[]};
   return {id:uid(), title:title || p.meta.title || 'Sin título', artist:p.meta.artist || '', key:p.meta.key, conf,
-    sections:fix.sections, meta:{notes:p.meta.notes, spellFix:fix.changes.length ? fix.changes : undefined}, tags:[], favorite:false, createdAt:Date.now(), updatedAt:Date.now(), lastOpened:0,
+    sections:fix.sections, meta:{notes:p.meta.notes, spellFix:fix.changes.length ? fix.changes : undefined, keyWhy:p.meta.keyWhy}, tags:[], favorite:false, createdAt:Date.now(), updatedAt:Date.now(), lastOpened:0,
     sourceFileId:fileId, sourceName: sourceName || fileName, status: empty ? 'sin-texto' : 'revisar'};
 }
 async function pdfExtract(buf, perPage){

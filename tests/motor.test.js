@@ -135,6 +135,14 @@ eq(Music.semiBetween({i:2, minor:false}, E.matchKey({i:2, minor:false}, C)), -2,
 eq(E.matchKey({i:4, minor:true}, C), {i:9, minor:true, relative:true}, 'canción menor (Em) estando en C se abre en Am, la relativa');
 eq(E.matchKey({i:7, minor:false}, {i:9, minor:true}), {i:0, minor:false, relative:true}, 'canción mayor estando en Am se abre en C, la relativa');
 eq(E.matchKey(null, C), null, 'sin tonalidad confirmada no se adivina');
+/* Tonalidad deducida por los acordes */
+const ek = l => Music.estimateKey(l.split(' '));
+const ea = ek('A E F#m D E A E F#m D E F#m E D F#m E D Bm D E D F#m E A');
+eq([Music.keyName(ea.key), ea.conf], ['A','alta'], 'canción clara en A: se decide sola');
+eq(ea.why, '100% de los acordes son de A y empieza y termina en A', 'explica por qué');
+eq(ek('C G Am F').conf !== 'alta', true, 'con pocos acordes no se da por segura');
+eq(ek('Am F C G Am F C G E Am').key, {i:9, minor:true}, 'canción en Am (con E) → Am');
+eq(ek('C Eb F Bb Db Ab G Cm F# B').conf, 'baja', 'acordes de muchos tonos: no se da por segura');
 /* Notas de interpretación */
 const nt = `[Coro]\nG       D\nfrase de prueba\nSe repite\n(x2)\n(Todos)\n{nota-derecha: Una vez más}\n{c: Suave}\n(Aleluya)`;
 const pn = E.parseSongText(nt, {});

@@ -11,6 +11,7 @@ Están hechas las fases 1 a 5 del plan de `docs/PROMPT_ORIGINAL.md`, todas funci
 - **Fase 1 · Biblioteca e importación**
   - Importa PDF digital, Word .docx y texto o ChordPro.
   - Pantalla de revisión con nivel de confianza por campo.
+  - **Tonalidad deducida por los acordes** (`Music.estimateKey`, devuelve `conf` y `why`): se da por segura (`alta`, "Detectado por los acordes", en verde) solo con evidencia clara: ≥8 acordes, ≥90 % del tono, margen ≥3 y empieza o termina en la tónica. Si no, la revisión dice "Probable" o "Dudoso", explica por qué (`meta.keyWhy`) y ofrece "Buscar el tono" (Google) y "Escuchar en YouTube". (A la dueña le molestaba que siempre pidiera confirmar el tono.)
   - Edición, etiquetas, favoritas, recientes y detección de duplicados.
   - El documento original se guarda aparte.
   - **Procesados** (en Importar, `jobsHTML`): cada documento importado en la sesión muestra su estado real ("Falta revisar" con su botón, o "✓ Revisada" con "Abrir"). El botón de arriba solo cuenta lo que falta revisar (`jobPending`) y "Quitar las revisadas" limpia la lista. Al terminar una revisión, si falta algo de lo importado, se vuelve a Importar. (A la dueña le confundía que contara también lo ya revisado.)
@@ -92,7 +93,7 @@ Es un solo archivo, ordenado por secciones con comentarios `/* ===== ... ===== *
 ## Modelo de datos
 
 ```js
-Song = { id, title, artist, key:{i:0-11, minor:bool}|null,
+Song = { id, title, artist, key:{i:0-11, minor:bool}|null,   // meta.keyWhy: por qué se eligió el tono
   conf:{title,artist,key: 'alta'|'media'|'baja'},
   sections:[{type:'intro'|'verso'|'precoro'|'coro'|'puente'|'interludio'|'final'|'otro'|'sin', label,
              lines:[{chords:[{pos, raw, ok}], lyric, note?:'left'|'center'|'right'}]}],
