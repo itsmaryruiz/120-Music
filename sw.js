@@ -1,6 +1,6 @@
 /* Funcionamiento sin conexión.
    Cambia VERSION cada vez que subas una versión nueva de index.html. */
-const VERSION = 'alabanza-v21';
+const VERSION = 'alabanza-v22';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './icons/icon-maskable-512.png', './icons/logo.png'];
 const LIBS = [
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
