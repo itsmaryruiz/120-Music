@@ -13,6 +13,7 @@ Están hechas las fases 1 a 5 del plan de `docs/PROMPT_ORIGINAL.md`, todas funci
   - Pantalla de revisión con nivel de confianza por campo.
   - Edición, etiquetas, favoritas, recientes y detección de duplicados.
   - El documento original se guarda aparte.
+  - **Procesados** (en Importar, `jobsHTML`): cada documento importado en la sesión muestra su estado real ("Falta revisar" con su botón, o "✓ Revisada" con "Abrir"). El botón de arriba solo cuenta lo que falta revisar (`jobPending`) y "Quitar las revisadas" limpia la lista. Al terminar una revisión, si falta algo de lo importado, se vuelve a Importar. (A la dueña le confundía que contara también lo ya revisado.)
   - **Buscar acordes en internet** (en Importar, y desde Buscar cuando no hay resultados): atajos que abren en el navegador Google, LaCuerda y Cifra Club (vía Google `site:`) y YouTube. La app **no lee ni copia** esas páginas: la dueña verifica los acordes, los copia y los pega en "Pega letra y acordes". Necesita internet.
 - **Fase 2 · Motor musical**
   - Interpreta, valida y transporta acordes.

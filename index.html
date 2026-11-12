@@ -1478,6 +1478,21 @@ function webLinksHTML(q){
   const links = [['Google', g('')], ['LaCuerda', g(' site:lacuerda.net')], ['Cifra Club', g(' site:cifraclub.com')], ['YouTube (escuchar)', 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q)]];
   return links.map(([l, u], i) => `<a class="btn${i ? '' : ' pri'}" href="${esc(u)}" target="_blank" rel="noopener noreferrer" data-web="1">${esc(l)} ↗</a>`).join('');
 }
+/* Documentos importados en esta sesión (el más nuevo arriba). Solo cuenta lo que de verdad falta revisar. */
+const jobPending = j => j.songIds.filter(id => { const x = songById(id); return x && x.status !== 'ok'; });
+function jobsHTML(){
+  const pend = S.jobs.flatMap(jobPending), done = S.jobs.filter(j => j.state !== 'run' && !jobPending(j).length);
+  return `<section class="sect"><header><h2>Procesados</h2><div class="row">${done.length ? `<button class="btn ghost sm" data-act="clearJobs">Quitar las revisadas</button>` : ''}${pend.length ? `<button class="btn pri" data-act="reviewJobs">${pend.length === 1 ? 'Revisar la que falta' : `Revisar las ${pend.length} que faltan`}</button>` : ''}</div></header>
+    <div class="list">${S.jobs.map(j => {
+      const p = jobPending(j), alive = j.songIds.filter(id => songById(id));
+      const st = j.state === 'run' ? `<span class="st run">${esc(j.status)}</span>`
+        : j.state === 'err' ? `<span class="st err">${esc(j.status)}</span>`
+        : p.length ? `<span class="st run">${p.length === 1 ? 'Falta revisar' : `Faltan ${p.length} por revisar`}</span>`
+        : alive.length ? `<span class="st ok">✓ Revisada${alive.length > 1 ? 's' : ''}</span>` : `<span class="st">${esc(j.status)}</span>`;
+      const btn = j.state !== 'run' && p.length ? `<button class="btn sm pri" data-act="reviewJob" data-id="${j.id}">Revisar</button>` : alive.length === 1 && !p.length ? `<button class="btn sm" data-act="open" data-id="${alive[0]}">Abrir</button>` : `<span class="badge">${esc(j.kind || '')}</span>`;
+      return `<div class="job"><b style="overflow-wrap:anywhere">${esc(j.name)}</b>${btn}${st}</div>`;
+    }).join('')}</div></section>`;
+}
 VIEWS.importar = () => `
   <header class="ph"><div><p class="eyebrow">Importar</p><h1>Convierte tus documentos en canciones</h1></div></header>
   <div class="drop" id="drop">
@@ -1486,7 +1501,7 @@ VIEWS.importar = () => `
     <div class="row" style="justify-content:center"><button class="btn pri" data-act="pick">Elegir archivos</button></div>
     <label class="small"><input type="checkbox" id="perpage" ${S.prefs.perPage?'checked':''}> En PDF, una canción por página (cancioneros)</label>
   </div>
-  ${S.jobs.length ? `<section class="sect"><header><h2>Procesados</h2>${S.jobs.some(j=>j.songIds.length)?`<button class="btn" data-act="reviewJobs">Revisar ${S.jobs.reduce((n,j)=>n+j.songIds.filter(id=>songById(id)).length,0)} canciones</button>`:''}</header><div class="list">${S.jobs.map(j=>`<div class="job"><b style="overflow-wrap:anywhere">${esc(j.name)}</b><span class="badge">${esc(j.kind||'')}</span><span class="st ${j.state}">${esc(j.status)}</span></div>`).join('')}</div></section>` : ''}
+  ${S.jobs.length ? jobsHTML() : ''}
   <section class="card" id="websearch"><h3>Buscar acordes en internet</h3>
     <p class="muted small">Escribe el nombre de la canción (y el artista, si quieres). La búsqueda se abre en tu navegador: revisa que los acordes estén bien, cópialos y pégalos abajo en “Pega letra y acordes”.</p>
     <input class="inp" id="wq" type="search" placeholder="Ej.: Suelto Sarai Rivera" value="${esc(S.webq || '')}" autocomplete="off">
@@ -2012,7 +2027,7 @@ function startReview(ids){
 function nextReview(){
   const R = S.review; R.pos++;
   while(R.pos < R.queue.length && !songById(R.queue[R.pos])) R.pos++;
-  if(R.pos >= R.queue.length){ S.review = null; S.stack = []; go('biblioteca', {}, false); toast('Revisión terminada'); return; }
+  if(R.pos >= R.queue.length){ S.review = null; S.stack = []; const more = S.jobs.flatMap(jobPending).length; go(more ? 'importar' : 'biblioteca', {}, false); toast(more ? `Revisión terminada. ${more === 1 ? 'Falta 1' : `Faltan ${more}`} de lo importado.` : 'Revisión terminada'); return; }
   R.text = songToText(songById(R.queue[R.pos])); S.route = {view:'revisar', params:{}}; render(); window.scrollTo(0,0);
 }
 
@@ -2441,7 +2456,9 @@ const ACT = {
   libSource(b){ S.lib.source = b.dataset.v; render(); },
   libFav(){ S.lib.fav = !S.lib.fav; render(); },
   reviewPending(){ startReview(S.songs.filter(s=>s.status!=='ok' && !s.isExample).map(s=>s.id)); },
-  reviewJobs(){ startReview(S.jobs.flatMap(j=>j.songIds)); },
+  reviewJobs(){ startReview(S.jobs.flatMap(jobPending)); },
+  reviewJob(b){ const j = S.jobs.find(x => x.id === b.dataset.id); if(j) startReview(jobPending(j)); },
+  clearJobs(){ S.jobs = S.jobs.filter(j => j.state === 'run' || jobPending(j).length); render(); },
   pick(){ $('#filepick').click(); },
   async confirmReview(){
     const s = songById(S.review.queue[S.review.pos]);
